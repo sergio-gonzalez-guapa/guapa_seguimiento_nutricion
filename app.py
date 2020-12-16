@@ -12,11 +12,12 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import json
 
-from data_processing import fechas_pendientes, object_file,historia_bloques
+from data_processing import df_nutricion_preforza_pc,historia_bloques,diccionario_insumos
 import upload_file
 import aplicaciones_por_bloque
 import agregar_comentario
 import informacion_por_bloque
+import nutricion_preforza_pc
 
 
 # the style arguments for the sidebar
@@ -58,9 +59,9 @@ sidebar = html.Div(
         ),
         dbc.Nav(
             [
-                dbc.NavLink("Información de bloques", href="/page-1", id="page-2-link"),
-                dbc.NavLink("aplicaciones pre-forza pendientes", href="/page-2", id="page-3-link"),
-                dbc.NavLink("Aplicaciones ejecutadas por bloque", href="/page-3", id="page-4-link")
+                dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
+                dbc.NavLink("Nutrición preforza PC", href="/page-2", id="page-2-link"),
+                dbc.NavLink("Aplicaciones ejecutadas por bloque", href="/page-3", id="page-3-link")
             ],
             vertical=True,
             pills=True,
@@ -74,7 +75,8 @@ content = html.Div(id="page-content", style=CONTENT_STYLE)
 
 app = dash.Dash(__name__,external_stylesheets=[dbc.themes.BOOTSTRAP],
 meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}
-    ])
+    ],suppress_callback_exceptions = True)
+#Supress callback exceptions para no validar elementos de callbacks dinámicos
 server = app.server
 app.layout = html.Div([dcc.Location(id="url"),sidebar, content])                   #this is the key of the division!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 
@@ -90,17 +92,16 @@ def toggle_active_links(pathname):
         return True, False, False
     return [pathname == f"/page-{i}" for i in range(1, 4)]
 
-
+######################################
 ## URL callback
+######################################
+
 @app.callback(Output("page-content", "children"), [Input("url", "pathname")])
 def render_page_content(pathname):
     if pathname in ["/", "/page-1"]:
         return informacion_por_bloque.crear_filtro(historia_bloques)
     elif pathname == "/page-2":
-        return html.Div(dash_table.DataTable(
-    id='table',
-    columns=[{"name": i, "id": i} for i in fechas_pendientes.columns],
-    data=fechas_pendientes.to_dict('records'),editable=True))
+        return nutricion_preforza_pc.crear_filtro(df_nutricion_preforza_pc)
 
     elif pathname == "/page-3":
         return aplicaciones_por_bloque.content
@@ -114,6 +115,7 @@ def render_page_content(pathname):
         ]
     )
 
+
 @app.callback(Output('output-data-upload', 'children'),
               [Input('upload-data', 'contents')],
               [State('upload-data', 'filename'),
@@ -126,21 +128,9 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
         return children
 
 
-@app.callback(
-    [Output('data-table-1', 'data'),
-    Output('data-table-1', 'columns')],
-    [Input('demo-dropdown', 'value')])
-def update_table(value):
-    data = object_file[value]
-    data.drop(["dias"],axis=1, inplace=True)
-    data["fechas"]=data.fechas.dt.date
-    data["fecha_ejecucion"]=data.fecha_ejecucion.dt.date
-    data["ejecucion-plan"]=data["ejecucion-plan"].dt.days
-    _cols = [{"name": i, "id": i} for i in data.columns]
-    return data.to_dict('records'),_cols
-
-
-
+###
+# Actualizar tabla histórica de estados
+###
 @app.callback(
     [Output('div-lote','children'),
     Output('year-dropdown', 'options'),
@@ -158,32 +148,52 @@ def actualizar_lote(lote):
 def actualizar_year(year):
     return year
 
+
 @app.callback(
     [Output('data-table-info-bloque', 'data'),
     Output('data-table-info-bloque', 'columns')],
     [Input('div-lote', 'children'),
     Input('div-year', 'children')])
 def actualizar_bloques(lote,year):
-    data = historia_bloques.query("lote==@lote")
+    data = historia_bloques.query("lote==@lote").copy()
     if year !="":
         data.query("año==@year",inplace=True)
     _cols = [{"name": i, "id": i} for i in data.columns]
-    lista_dicts_years = [{"label":"año 20" + str(x),"value":x} for x in data["año"].unique()]
     return data.to_dict('records'),_cols
 
-# @app.callback(
-#     [Output('data-table-info-bloque', 'data'),
-#     Output('data-table-info-bloque', 'columns')],
-#     [Input('year-dropdown', 'value')],
-#     [State('lote-dropdown', 'value')]
-#     )
-# def actualizar_bloques_por_year(year,lote):
-#     data = historia_bloques.query("lote==@lote")
-#     _cols = [{"name": i, "id": i} for i in data.columns]
-#     lista_dicts_years = [{"label":"año 20" + str(x),"value":x} for x in data["año"].unique()]
-#     return data.to_dict('records'),_cols
+###
+# Actualizar nutrición preforza PC
+###
+@app.callback(
+    Output('div-lote-nutricion-preforza-pc','children'),
+    [Input('lote-nutricion-preforza-pc-dropdown', 'value')])
+def actualizar_year(lote):
+    return lote
+
+@app.callback(
+    [Output('data-table-nutricion-preforza-pc', 'data'),
+    Output('data-table-nutricion-preforza-pc', 'columns'),
+    Output('data-table-nutricion-preforza-pc', 'tooltip_data')],
+    [Input('div-lote-nutricion-preforza-pc','children')]
+    )
+def actualizar_bloques(lote):
+    data = df_nutricion_preforza_pc.query("lote==@lote").copy()
+    _cols = [{"name": i, "id": i} for i in data.columns]
+    return data.to_dict('records'),_cols,[
+        {
+            column: {'value': diccionario_insumos[value] if column=="formula" else str(value), 'type': 'markdown','duration':None} 
+            for column, value in row.items()
+        } for row in data[["formula","Observaciones"]].to_dict('rows')
+    ]
 
 if __name__ == '__main__':
     app.run_server(debug=False,host='0.0.0.0',port=8080)
-    #app.run_server()
+    # app.run_server(debug=True)
+
+    ##Do not use run server in production environments!
+    #app.run_server(debug=True, dev_tools_ui=True, dev_tools_props_check=False)
+    
+    #Hide the UI with dev_tools_ui=False
+    #Turn off the component property validation with dev_tools_props_check=False.
+
 
