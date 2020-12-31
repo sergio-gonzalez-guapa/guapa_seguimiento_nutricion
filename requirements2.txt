@@ -25,6 +25,7 @@ plotly==4.11.0
 psycopg2==2.8.6
 pytz==2019.1
 six==1.12.0
+SQLAlchemy==1.3.20
 traitlets==4.3.2
 urllib3==1.24.3
 Werkzeug==0.15.5
