@@ -12,7 +12,7 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import json
 
-from data_processing import df_nutricion_preforza_pc,historia_bloques,diccionario_insumos
+from data_processing import df_nutricion_preforza_pc,historia_bloques
 import upload_file
 import aplicaciones_por_bloque
 import agregar_comentario
@@ -164,27 +164,44 @@ def actualizar_bloques(lote,year):
 ###
 # Actualizar nutrición preforza PC
 ###
-@app.callback(
-    Output('div-lote-nutricion-preforza-pc','children'),
-    [Input('lote-nutricion-preforza-pc-dropdown', 'value')])
-def actualizar_year(lote):
-    return lote
 
+#Actualiza dropdown de bloques según gs
+@app.callback(
+    [Output('div-gs-nutricion-preforza-pc','children'),
+    Output('bloque-nutricion-preforza-pc-dropdown', 'options'),
+    Output('bloque-nutricion-preforza-pc-dropdown', 'value')],
+    [Input('gs-nutricion-preforza-pc-dropdown', 'value')])
+def actualizar_gs_y_dropdown_bloques_nutricion_preforza_pc(gs):
+
+    data = df_nutricion_preforza_pc.query("gruposiembra2==@gs")
+    bloques = data["id_bloque"].unique()
+    bloques.sort()
+    lista_dicts_bloques = [{"label":"bloque " + str(x),"value":x} for x in bloques]
+    return gs,lista_dicts_bloques,""
+
+
+#Actualizar div bloque
+@app.callback(
+    Output('div-bloque-nutricion-preforza-pc','children'),
+    [Input('bloque-nutricion-preforza-pc-dropdown', 'value')])
+def actualizar_year(year):
+    return year
+
+
+#Actualizar data table según los div de gs y bloque
 @app.callback(
     [Output('data-table-nutricion-preforza-pc', 'data'),
-    Output('data-table-nutricion-preforza-pc', 'columns'),
-    Output('data-table-nutricion-preforza-pc', 'tooltip_data')],
-    [Input('div-lote-nutricion-preforza-pc','children')]
-    )
-def actualizar_bloques(lote):
-    data = df_nutricion_preforza_pc.query("lote==@lote").copy()
+    Output('data-table-nutricion-preforza-pc', 'columns')],
+    [Input('div-gs-nutricion-preforza-pc', 'children'),
+    Input('div-bloque-nutricion-preforza-pc', 'children')])
+def actualizar_bloques_nutricion_preforza_pc(gs,bloque):
+    data = df_nutricion_preforza_pc.query("gruposiembra2==@gs").copy()
+    if bloque !="":
+        data.query("id_bloque==@bloque",inplace=True)
     _cols = [{"name": i, "id": i} for i in data.columns]
-    return data.to_dict('records'),_cols,[
-        {
-            column: {'value': diccionario_insumos[value] if column=="formula" else str(value), 'type': 'markdown','duration':None} 
-            for column, value in row.items()
-        } for row in data[["formula","Observaciones"]].to_dict('rows')
-    ]
+    return data.to_dict('records'),_cols
+
+
 
 if __name__ == '__main__':
     app.run_server(debug=False,host='0.0.0.0',port=8080)

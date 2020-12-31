@@ -5,16 +5,29 @@ import dash_core_components as dcc
 
 
 def crear_filtro(df):
-    lotes = df.lote.unique()
-    lotes.sort()
-    lista_dicts_lote = [{"label":"lote " + str(x),"value":x} for x in lotes]
+    grupossiembra = df.gruposiembra2.unique()
+    grupossiembra.sort()
+    lista_dicts_gs = [{"label":"grupo " + str(x),"value":x} for x in grupossiembra]
+
+    default_bloques = ['01']
+    lista_dicts_bloques = [{"label":x,"value":x} for x in default_bloques]
+    # lotes = df.lote.unique()
+    # lotes.sort()
+    # lista_dicts_lote = [{"label":"lote " + str(x),"value":x} for x in lotes]
+
     content =html.Div([
         dcc.Dropdown(
-            id='lote-nutricion-preforza-pc-dropdown',
-            options=lista_dicts_lote,
+            id='gs-nutricion-preforza-pc-dropdown',
+            options=lista_dicts_gs,
             value=1
         ),
-        html.Div(id='div-lote-nutricion-preforza-pc',hidden=True),
+        dcc.Dropdown(
+            id='bloque-nutricion-preforza-pc-dropdown',
+            options=lista_dicts_bloques,
+            value=1
+        ),
+        html.Div(id='div-gs-nutricion-preforza-pc',hidden=True),
+        html.Div(id='div-bloque-nutricion-preforza-pc',hidden=True),
        # html.Div(
         dash_table.DataTable(
                 style_cell={
@@ -31,3 +44,4 @@ def crear_filtro(df):
     #)
     ])
     return content
+
