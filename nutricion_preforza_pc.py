@@ -4,44 +4,24 @@ import dash_table
 import dash_core_components as dcc
 
 
-def crear_filtro(df):
-    grupossiembra = df.gruposiembra2.unique()
-    grupossiembra.sort()
-    lista_dicts_gs = [{"label":"grupo " + str(x),"value":x} for x in grupossiembra]
+def crear_filtro(df_grupos_siembra):
 
-    default_bloques = ['01']
-    lista_dicts_bloques = [{"label":x,"value":x} for x in default_bloques]
-    # lotes = df.lote.unique()
-    # lotes.sort()
-    # lista_dicts_lote = [{"label":"lote " + str(x),"value":x} for x in lotes]
-
+    lista_dicts_gs = [{"label":row["descripcion"],"value":row["codigo"]} for index,row in df_grupos_siembra.iterrows()]
+ 
     content =html.Div([
         dcc.Dropdown(
             id='gs-nutricion-preforza-pc-dropdown',
             options=lista_dicts_gs,
-            value=1
-        ),
-        dcc.Dropdown(
-            id='bloque-nutricion-preforza-pc-dropdown',
-            options=lista_dicts_bloques,
-            value=1
+            value="256"
         ),
         html.Div(id='div-gs-nutricion-preforza-pc',hidden=True),
         html.Div(id='div-bloque-nutricion-preforza-pc',hidden=True),
-       # html.Div(
         dash_table.DataTable(
-                style_cell={
-        'overflow': 'hidden',
-        'textOverflow': 'ellipsis',
-        'maxWidth': 0
-    },
-        id='data-table-nutricion-preforza-pc',
-        css=[{
-        'selector': '.dash-table-tooltip',
-        'rule': 'width: 700px !important; max-width: 700px !important;'
-    }]
-    )
-    #)
-    ])
+        id='data-table-nutricion-preforza-pc'),
+        dcc.Dropdown(
+            id='bloque-nutricion-preforza-pc-dropdown'
+        ),
+        dash_table.DataTable(
+        id='data-table-nutricion-preforza-pc-por-bloque')])
     return content
 

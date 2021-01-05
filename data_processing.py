@@ -1,9 +1,12 @@
 
 import pandas as pd 
+import numpy as np
 import locale 
 import psycopg2
 import sqlalchemy
 from sqlalchemy import event
+
+locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 
 #Conexión PPC remota
 try:
@@ -92,52 +95,171 @@ except Exception as e:
 
 ## Extraer información tabla bloques:
 ##Falta corregir join de grupossiembra
+
+#####
+# Listado de grupos de siembra
+####
+
+## Extraer información tabla bloques:
 try:
-    ejecucion_aplicaciones = pd.read_sql_query(''' 
-    SELECT
-    formula, 
-    apldate,
-    observaciones,
-    descripcion as id_bloque,
-    substring(descripcion from 1 for 2) as lote,
-    substring(descripcion from 3 for 2) as bloque,
-    cast(substring(descripcion from 5 for 2)as integer) as año,
-    finiciosiembra,
-    finduccion,
-    gruposiembra2
-    from (select blocknumber,t2.descripcion,finiciosiembra,finduccion,gruposiembra, t3.descripcion as gruposiembra2 from siembra as t1 inner join blocks as t2 on t1.blocknumber=t2.codigo inner join grupossiembra as t3 on t2.gruposiembra = t3.codigo) as t1 inner join   
-    
-  (SELECT apldate
-      ,formula
-      ,observaciones
-      ,blocknumber
-  FROM (select codigo,
-  apldate,
-  formula,
-  observaciones
-    from mantenimientocampos
-    where formula in (select distinct codigo from formulas_det where insumo in(
-      select insumo from categoria_insumos where categorias_por_insumo='Fertilizante'
-    ))) as t1
-  inner join mantenimientocampos_detalleblocks as t2
-  on t1.codigo=t2.codigo
-  where blocknumber in (select blocknumber from siembra as t1 inner join blocks as t2 on t1.blocknumber=t2.codigo)) as t2
-  on t1.blocknumber = t2.blocknumber
-  order by apldate''',connection)
+    grupossiembra = pd.read_sql_query('''select * from grupossiembra where fecha >= '2014-03-01'::date''',connection)
+    grupossiembra.sort_values(by="fecha",inplace=True)
 except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
 
+df_grupos_siembra = grupossiembra[["codigo","descripcion"]]
 
 
-df_nutricion_preforza_pc = ejecucion_aplicaciones.query("apldate<finduccion")
-df_nutricion_preforza_pc.drop(["lote","bloque","año","observaciones"],axis=1,inplace=True)
-df_nutricion_preforza_pc.drop_duplicates(inplace=True) #Revisar dónde se generan duplicados
-locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
-df_nutricion_preforza_pc["apldate"] =  df_nutricion_preforza_pc.apldate.dt.strftime('%d-%B-%Y')
-df_nutricion_preforza_pc["finiciosiembra"] =  df_nutricion_preforza_pc.finiciosiembra.dt.strftime('%d-%B-%Y')
-df_nutricion_preforza_pc["finduccion"] =  df_nutricion_preforza_pc.finduccion.dt.strftime('%d-%B-%Y')
+#################
+## Traer bloques de un grupo de forza específico
+#################
+
+def retorna_bloques_de_gs(gs):
+
+  ## Extraer información tabla bloques:
+  consulta = '''select codigo,descripcion from blocks where gruposiembra =%s '''
+  try:
+      bloques = pd.read_sql_query(consulta,con=connection,params=[str(gs)])
+
+      lista_dicts_bloques = [{"label":row["descripcion"],"value":row["codigo"]} for _,row in bloques.iterrows()]
+      return lista_dicts_bloques
+  except Exception as e:
+
+      print("hubo un error", e)
+      connection.rollback()
+  
+
+def retorna_info_bloques_de_gs(gs):
+    try:
+        bloques = pd.read_sql_query('''select codigo,descripcion,lote,area,gruposiembra from blocks where gruposiembra = %s''',
+        con = connection,params = [gs])
+        df_resultado_union_bloque_siembra = pd.DataFrame(columns=["no hay","bloques"])
+        if bloques.empty==False:
+            cedulas = pd.read_sql_query('''select codigo, blocknumber from MANTENIMIENTOCAMPOS_DETALLEBLOCKs where blocknumber in %s ''',
+            con = connection,params =[tuple(set(bloques.codigo.to_list()))])
+            siembra = pd.read_sql_query('''select blocknumber,plantcant,finiciosiembra,finduccion from siembra where blocknumber in %s ''',
+            con = connection,params =[tuple(set(bloques.codigo.to_list()))])
+
+            if cedulas.empty==False:
+                formulas = pd.read_sql_query('''select codigo,formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
+                
+                df_union_formulas_cedulas = formulas.merge(cedulas, how="inner",on="codigo")
+                df_union_formulas_cedulas.sort_values(by=["blocknumber","apldate"],inplace=True)
+                
+                df_union_formulas_cedulas["diff"]=df_union_formulas_cedulas.groupby("blocknumber")["apldate"].diff()/np.timedelta64(1, 'D')
+
+                df_resultado = df_union_formulas_cedulas.groupby("blocknumber")["diff"].agg(num_aplicaciones="count",dias_prom="mean",max_dias="max",min_dias="min").reset_index().round(2)
+                df_resultado.rename(columns={"blocknumber":"codigo"},inplace=True)
+
+                df_resultado_union_bloque = bloques.merge(df_resultado,how="left",on="codigo")
+                df_resultado_union_bloque_siembra = df_resultado_union_bloque.merge(siembra,how="left",left_on="codigo",right_on="blocknumber")
+                df_resultado_union_bloque_siembra.drop(["codigo","blocknumber","gruposiembra"],axis=1,inplace=True)
+                ### Ajustes
+
+                df_resultado_union_bloque_siembra["finiciosiembra"]=df_resultado_union_bloque_siembra.finiciosiembra.dt.strftime('%d-%B-%Y')
+                df_resultado_union_bloque_siembra["finduccion"]=df_resultado_union_bloque_siembra.finduccion.dt.strftime('%d-%B-%Y')
+                df_resultado_union_bloque_siembra.rename(columns={"descripcion":"bloque"},inplace=True)
+
+        return df_resultado_union_bloque_siembra
+    except AttributeError as error:
+        print("error con el campo:",error)
+        return df_resultado_union_bloque_siembra
+    except Exception as e:
+
+        print("hubo un error", e)
+        connection.rollback()
+
+
+def retorna_info_aplicaciones_de_gs(bloque):
+
+  ## Extraer información tabla bloques:
+  df_resultado_union_bloque_siembra = pd.DataFrame(columns=["Seleccione","bloque"])
+  
+  if bloque =="":
+      return df_resultado_union_bloque_siembra
+
+  try:
+    
+    cedulas = pd.read_sql_query('''select codigo from MANTENIMIENTOCAMPOS_DETALLEBLOCKs where blocknumber = %s ''',
+    con = connection,params =[bloque])
+
+    if cedulas.empty==False:
+        formulas = pd.read_sql_query('''select codigo, formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
+        detalle_formulas = pd.read_sql_query('''
+        select formula,t1.descripcion as descripcion_formula, t2.descripcion as etapa from 
+        (select codigo as formula, descripcion,etapa from formulas where codigo in %s) as t1
+        left join etapasaplicacion as t2 on  t1.etapa=t2.codigo
+        
+         ''', con = connection,params =[tuple(set(formulas.formula.to_list()))])
+        formulas_con_detalle = formulas.merge(detalle_formulas,how="left",on="formula")
+
+        df_union_formulas_cedulas = formulas_con_detalle.merge(cedulas, how="inner",on="codigo")
+        df_union_formulas_cedulas.sort_values(by=["apldate"],inplace=True)
+
+        df_union_formulas_cedulas["diff"]=df_union_formulas_cedulas["apldate"].diff()/np.timedelta64(1, 'D')
+        df_resultado_union_bloque_siembra = df_union_formulas_cedulas[["formula","descripcion_formula","apldate","diff","etapa"]]
+        df_resultado_union_bloque_siembra["apldate"]=df_resultado_union_bloque_siembra.apldate.dt.strftime('%d-%B-%Y')
+
+    return df_resultado_union_bloque_siembra
+  except Exception as e:
+
+      print("hubo un error", e)
+      connection.rollback()
+
+
+
+# try:
+#     ejecucion_aplicaciones = pd.read_sql_query(''' 
+#     SELECT
+#     formula, 
+#     apldate,
+#     observaciones,
+#     descripcion as id_bloque,
+#     substring(descripcion from 1 for 2) as lote,
+#     substring(descripcion from 3 for 2) as bloque,
+#     cast(substring(descripcion from 5 for 2)as integer) as año,
+#     finiciosiembra,
+#     finduccion,
+#     gruposiembra2
+#     from (select blocknumber,t2.descripcion,finiciosiembra,finduccion,gruposiembra, t3.descripcion as gruposiembra2 from siembra as t1 inner join blocks as t2 on t1.blocknumber=t2.codigo inner join grupossiembra as t3 on t2.gruposiembra = t3.codigo) as t1 inner join   
+    
+#   (SELECT apldate
+#       ,formula
+#       ,observaciones
+#       ,blocknumber
+#   FROM (select codigo,
+#   apldate,
+#   formula,
+#   observaciones
+#     from mantenimientocampos
+#     where formula in (select distinct codigo from formulas_det where insumo in(
+#       select insumo from categoria_insumos where categorias_por_insumo='Fertilizante'
+#     ))) as t1
+#   inner join mantenimientocampos_detalleblocks as t2
+#   on t1.codigo=t2.codigo
+#   where blocknumber in (select blocknumber from siembra as t1 inner join blocks as t2 on t1.blocknumber=t2.codigo)) as t2
+#   on t1.blocknumber = t2.blocknumber
+#   order by apldate''',connection)
+# except Exception as e:
+
+#     print("hubo un error", e)
+#     connection.rollback()
+
+
+
+# df_nutricion_preforza_pc = ejecucion_aplicaciones.query("apldate<finduccion")
+# df_nutricion_preforza_pc.drop(["lote","bloque","año","observaciones"],axis=1,inplace=True)
+# df_nutricion_preforza_pc.drop_duplicates(inplace=True) #Revisar dónde se generan duplicados
+# locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
+# df_nutricion_preforza_pc["apldate"] =  df_nutricion_preforza_pc.apldate.dt.strftime('%d-%B-%Y')
+# df_nutricion_preforza_pc["finiciosiembra"] =  df_nutricion_preforza_pc.finiciosiembra.dt.strftime('%d-%B-%Y')
+# df_nutricion_preforza_pc["finduccion"] =  df_nutricion_preforza_pc.finduccion.dt.strftime('%d-%B-%Y')
+
+
+
+
 #Conservar para hacer tooltips
 # ##Diccionario insumos
 # insumos = pd.read_excel("insumos_por_aplicacion.xlsx")
