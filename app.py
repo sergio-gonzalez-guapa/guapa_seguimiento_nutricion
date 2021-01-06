@@ -12,7 +12,7 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import json
 
-from data_processing import historia_bloques,df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs
+from data_processing import historia_bloques,df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula
 import upload_file
 import aplicaciones_por_bloque
 import agregar_comentario
@@ -61,7 +61,7 @@ sidebar = html.Div(
             [
                 dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
                 dbc.NavLink("Nutrición preforza PC", href="/page-2", id="page-2-link"),
-                dbc.NavLink("Aplicaciones ejecutadas por bloque", href="/page-3", id="page-3-link")
+                dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link")
             ],
             vertical=True,
             pills=True,
@@ -104,7 +104,7 @@ def render_page_content(pathname):
         return nutricion_preforza_pc.crear_filtro(df_grupos_siembra)
 
     elif pathname == "/page-3":
-        return aplicaciones_por_bloque.content
+        return aplicaciones_por_bloque.crear_filtro(df_formulas)
     # If the user tries to reach a different page, return a 404 message
     else:
         return dbc.Jumbotron(
@@ -211,6 +211,26 @@ def actualizar_bloques_nutricion_preforza_pc(bloque):
     _cols=[{"name": i, "id": i} for i in data.columns]
     data_as_dict = data.to_dict('records')
     return data_as_dict,_cols
+
+
+#####
+# Actualiza fórmulas
+##### 
+
+#Actualiza dropdown de bloques según gs
+@app.callback(
+    [Output('data-table-detalle-formulas', 'data'),
+    Output('data-table-detalle-formulas', 'columns')],
+    [Input('formula-dropdown', 'value')])
+def actualizar_gs_y_dropdown_bloques_nutricion_preforza_pc(formula):
+
+    #Hacer consulta para mostrar bloques del GS
+    data = retorna_detalle_formula(formula)
+    _cols=[{"name": i, "id": i} for i in data.columns]
+    data_as_dict = data.to_dict('records')
+    return data_as_dict,_cols
+
+
 
 if __name__ == '__main__':
     app.run_server(debug=False,host='0.0.0.0',port=8080)

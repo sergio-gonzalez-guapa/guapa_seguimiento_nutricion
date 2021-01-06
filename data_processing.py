@@ -100,16 +100,26 @@ except Exception as e:
 # Listado de grupos de siembra
 ####
 
-## Extraer información tabla bloques:
+## Extraer información grupos de siembra
 try:
-    grupossiembra = pd.read_sql_query('''select * from grupossiembra where fecha >= '2014-03-01'::date''',connection)
-    grupossiembra.sort_values(by="fecha",inplace=True)
+    grupossiembra = pd.read_sql_query('''select codigo,descripcion,fecha from grupossiembra where fecha >= '2014-03-01'::date order by fecha''',connection)
+    
 except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
 
 df_grupos_siembra = grupossiembra[["codigo","descripcion"]]
+
+## Extraer información de fórmulas
+try:
+    df_formulas = pd.read_sql_query('''select codigo, descripcion from formulas''',connection)
+except Exception as e:
+
+    print("hubo un error", e)
+    connection.rollback()
+
+
 
 
 #################
@@ -207,6 +217,49 @@ def retorna_info_aplicaciones_de_gs(bloque):
 
       print("hubo un error", e)
       connection.rollback()
+
+
+
+def retorna_detalle_formula(formula):
+    detalle_formula = pd.DataFrame(columns=["Seleccione","Fórmula"])
+
+    if formula =="":
+        return detalle_formula
+
+    try:
+
+        formulas = pd.read_sql_query('''select codigo,descripcion from formulas where codigo = %s ''',
+        con = connection,params =[formula])
+
+        formulas_det = pd.read_sql_query('''select codigo,insumo,cantha from formulas_det where codigo = %s ''',
+        con = connection,params =[formula])
+
+        if formulas_det.empty==False:
+            insumos = pd.read_sql_query('''select codigo, descripcion from maestroinsumos where codigo in %s  ''',
+            con = connection,params =[tuple(set(formulas_det.insumo.to_list()))])
+            
+            union_formulas = formulas.merge(formulas_det, how="inner",on="codigo")
+            union_formulas.rename(columns={"descripcion":"nombre_formula"},inplace=True)
+            union_formulas.drop(["codigo"],axis=1,inplace=True)
+            union_formulas_insumos = union_formulas.merge(insumos,how="left",left_on="insumo",right_on="codigo")
+            detalle_formula = union_formulas_insumos[["nombre_formula","insumo","descripcion","cantha"]]
+            return detalle_formula
+        else:
+            return detalle_formula
+        
+        
+
+    except Exception as e:
+        
+        print("hubo un error", e)
+        connection.rollback()
+        return detalle_formula
+
+    
+    
+
+
+
 
 
 

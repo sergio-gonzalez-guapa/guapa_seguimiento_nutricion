@@ -19,7 +19,8 @@ def crear_filtro(df_grupos_siembra):
         dash_table.DataTable(
         id='data-table-nutricion-preforza-pc'),
         dcc.Dropdown(
-            id='bloque-nutricion-preforza-pc-dropdown'
+            id='bloque-nutricion-preforza-pc-dropdown',
+            placeholder="Seleccione un bloque"
         ),
         dash_table.DataTable(
         id='data-table-nutricion-preforza-pc-por-bloque')])
