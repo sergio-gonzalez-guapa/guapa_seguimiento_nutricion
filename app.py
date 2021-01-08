@@ -12,9 +12,9 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import json
 
-from data_processing import historia_bloques,df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula
+from data_processing import df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula, lotes_historia,retorna_info_estados_bloques,retorna_resumen_aplicaciones_por_bloque,retorna_grafica_peso_planta
 import upload_file
-import aplicaciones_por_bloque
+import insumos_por_formula
 import agregar_comentario
 import informacion_por_bloque
 import nutricion_preforza_pc
@@ -60,7 +60,7 @@ sidebar = html.Div(
         dbc.Nav(
             [
                 dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
-                dbc.NavLink("Nutrición preforza PC", href="/page-2", id="page-2-link"),
+                dbc.NavLink("Aplicaciones preforza PC", href="/page-2", id="page-2-link"),
                 dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link")
             ],
             vertical=True,
@@ -99,12 +99,12 @@ def toggle_active_links(pathname):
 @app.callback(Output("page-content", "children"), [Input("url", "pathname")])
 def render_page_content(pathname):
     if pathname in ["/", "/page-1"]:
-        return informacion_por_bloque.crear_filtro(historia_bloques)
+        return informacion_por_bloque.crear_filtro(lotes_historia)
     elif pathname == "/page-2":
         return nutricion_preforza_pc.crear_filtro(df_grupos_siembra)
 
     elif pathname == "/page-3":
-        return aplicaciones_por_bloque.crear_filtro(df_formulas)
+        return insumos_por_formula.crear_filtro(df_formulas)
     # If the user tries to reach a different page, return a 404 message
     else:
         return dbc.Jumbotron(
@@ -131,34 +131,17 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
 ###
 # Actualizar tabla histórica de estados
 ###
-@app.callback(
-    [Output('div-lote','children'),
-    Output('year-dropdown', 'options'),
-    Output('year-dropdown', 'value')],
-    [Input('lote-dropdown', 'value')])
-def actualizar_lote(lote):
 
-    data = historia_bloques.query("lote==@lote")
-    lista_dicts_years = [{"label":"año 20" + str(x),"value":x} for x in data["año"].unique()]
-    return lote,lista_dicts_years,""
-
-@app.callback(
-    Output('div-year','children'),
-    [Input('year-dropdown', 'value')])
-def actualizar_year(year):
-    return year
 
 
 @app.callback(
     [Output('data-table-info-bloque', 'data'),
     Output('data-table-info-bloque', 'columns')],
-    [Input('div-lote', 'children'),
-    Input('div-year', 'children')])
-def actualizar_bloques(lote,year):
-    data = historia_bloques.query("lote==@lote").copy()
-    if year !="":
-        data.query("año==@year",inplace=True)
-    _cols = [{"name": i, "id": i} for i in data.columns]
+    [Input('lote-dropdown', 'value')])
+def actualizar_bloques(lote):
+    data = retorna_info_estados_bloques(lote)
+    _cols=[{"name": i, "id": i} for i in data.columns]
+    data_as_dict = data.to_dict('records')
     return data.to_dict('records'),_cols
 
 ###
@@ -193,19 +176,40 @@ def actualizar_year(bloque):
     [Input('div-gs-nutricion-preforza-pc', 'children')])
 def actualizar_bloques_nutricion_preforza_pc(gs):
 
-    # if bloque !="":
-    #     data.query("id_bloque==@bloque",inplace=True)
     data = retorna_info_bloques_de_gs(gs)
     _cols=[{"name": i, "id": i} for i in data.columns]
     data_as_dict = data.to_dict('records')
     return data_as_dict,_cols
 
-#Actualizar data table agregado según los div de gs y bloque
+
+#Actualizar data table con el resumen de aplicaciones por categoria y bloque seleccionado
+@app.callback(
+    [Output('dt-resumen-aplicaciones-preforza-por-bloque', 'data'),
+    Output('dt-resumen-aplicaciones-preforza-por-bloque', 'columns')],
+    [Input('div-bloque-nutricion-preforza-pc', 'children')])
+def actualizar_resumen_aplicaciones_preforza(bloque):
+    
+    data = retorna_resumen_aplicaciones_por_bloque(bloque)
+    _cols=[{"name": i, "id": i} for i in data.columns]
+    data_as_dict = data.to_dict('records')
+    return data_as_dict,_cols
+
+
+#Actualizar gráfica de peso planta
+@app.callback(
+    Output('graph-peso-planta', 'figure'),
+    [Input('div-bloque-nutricion-preforza-pc', 'children')])
+def actualizar_peso_planta_preforza(bloque):
+    
+    return retorna_grafica_peso_planta(bloque)
+
+
+#Actualizar data table con las aplicaciones para el bloque seleccionado
 @app.callback(
     [Output('data-table-nutricion-preforza-pc-por-bloque', 'data'),
     Output('data-table-nutricion-preforza-pc-por-bloque', 'columns')],
     [Input('div-bloque-nutricion-preforza-pc', 'children')])
-def actualizar_bloques_nutricion_preforza_pc(bloque):
+def actualizar_aplicaciones_bloques_nutricion_preforza_pc(bloque):
     
     data = retorna_info_aplicaciones_de_gs(bloque)
     _cols=[{"name": i, "id": i} for i in data.columns]
@@ -220,15 +224,24 @@ def actualizar_bloques_nutricion_preforza_pc(bloque):
 #Actualiza dropdown de bloques según gs
 @app.callback(
     [Output('data-table-detalle-formulas', 'data'),
-    Output('data-table-detalle-formulas', 'columns')],
+    Output('data-table-detalle-formulas', 'columns'),
+    Output('data-table-detalle-formulas', 'tooltip_data')],
     [Input('formula-dropdown', 'value')])
-def actualizar_gs_y_dropdown_bloques_nutricion_preforza_pc(formula):
+def actualizar_insumos_por_formula(formula):
 
     #Hacer consulta para mostrar bloques del GS
     data = retorna_detalle_formula(formula)
     _cols=[{"name": i, "id": i} for i in data.columns]
     data_as_dict = data.to_dict('records')
-    return data_as_dict,_cols
+
+    tooltip_data=[
+        {
+            column: {'value': str(value), 'type': 'markdown'}
+            for column, value in row.items()
+        } for row in data[["descripcion"]].to_dict('records')
+    ]
+    
+    return data_as_dict,_cols,tooltip_data
 
 
 
