@@ -33,10 +33,10 @@ except Exception as e:
 #######################
 ### Cargue archivos temporales de excel
 #######################
-categorias_insumos = pd.read_excel("relacion_insumos_principales_categorias.xlsx")
+categorias_insumos = pd.read_excel("relacion_insumos_principales_categorias.xlsx",engine='openpyxl')
 categorias_insumos.dropna(subset=["categorias_por_insumo"],inplace=True)
 
-peso_planta = pd.read_excel("peso_planta.xlsx",dtype={"bloque":str})
+peso_planta = pd.read_excel("peso_planta.xlsx",dtype={"bloque":str},engine='openpyxl')
 peso_planta.sort_values(by=["bloque","edad"],inplace=True)
 
 
