@@ -1,4 +1,5 @@
 import pandas as pd
+import sys
 import numpy as np
 import pickle
 import dash
@@ -60,7 +61,7 @@ sidebar = html.Div(
         dbc.Nav(
             [
                 dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
-                dbc.NavLink("Aplicaciones preforza PC", href="/page-2", id="page-2-link"),
+                dbc.NavLink("Aplicaciones nutrición preforza PC", href="/page-2", id="page-2-link"),
                 dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link")
             ],
             vertical=True,
@@ -183,16 +184,17 @@ def actualizar_bloques_nutricion_preforza_pc(gs):
 
 
 #Actualizar data table con el resumen de aplicaciones por categoria y bloque seleccionado
-@app.callback(
-    [Output('dt-resumen-aplicaciones-preforza-por-bloque', 'data'),
-    Output('dt-resumen-aplicaciones-preforza-por-bloque', 'columns')],
-    [Input('div-bloque-nutricion-preforza-pc', 'children')])
-def actualizar_resumen_aplicaciones_preforza(bloque):
+#Tener en cuenta para cuando vuelva a poner de nuevo el resumen de todas las aplicaciones
+# @app.callback(
+#     [Output('dt-resumen-aplicaciones-preforza-por-bloque', 'data'),
+#     Output('dt-resumen-aplicaciones-preforza-por-bloque', 'columns')],
+#     [Input('div-bloque-nutricion-preforza-pc', 'children')])
+# def actualizar_resumen_aplicaciones_preforza(bloque):
     
-    data = retorna_resumen_aplicaciones_por_bloque(bloque)
-    _cols=[{"name": i, "id": i} for i in data.columns]
-    data_as_dict = data.to_dict('records')
-    return data_as_dict,_cols
+#     data = retorna_resumen_aplicaciones_por_bloque(bloque)
+#     _cols=[{"name": i, "id": i} for i in data.columns]
+#     data_as_dict = data.to_dict('records')
+#     return data_as_dict,_cols
 
 
 #Actualizar gráfica de peso planta
@@ -246,8 +248,11 @@ def actualizar_insumos_por_formula(formula):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False,host='0.0.0.0',port=8080)
-    #app.run_server(debug=True)
+    if sys.platform.startswith('win'):
+        app.run_server(debug=True)
+    else:
+        app.run_server(debug=False,host='0.0.0.0',port=8080)
+    
 
     ##Do not use run server in production environments!
     #app.run_server(debug=True, dev_tools_ui=True, dev_tools_props_check=False)

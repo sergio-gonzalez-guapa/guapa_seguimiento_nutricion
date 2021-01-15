@@ -190,17 +190,27 @@ def retorna_info_bloques_de_gs(gs):
                 #Filtro preforza
                 df_union_formulas_cedulas_siembra_blocks.query("apldate<finduccion",inplace=True)
 
+                #Filtro nutrición
+
+                #Definir categoría de la aplicación
+                insumos_por_formulas_seleccionadas = pd.read_sql_query('''select codigo,insumo from formulas_det where codigo in %s ''',
+                con = connection,params =[tuple(set(df_union_formulas_cedulas_siembra_blocks.formula.to_list()))])
+                insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
+                categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","categorias_por_insumo"]].drop_duplicates()
+                categoria_por_aplicacion.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
+
+                df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks.merge(categoria_por_aplicacion,how="left",on="formula")
+                df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks[df_union_formulas_cedulas_siembra_blocks['categoria'].str.contains("Fertilizante")]
                 #Días de diferencia
                 df_union_formulas_cedulas_siembra_blocks["diff"]=df_union_formulas_cedulas_siembra_blocks.groupby("blocknumber")["apldate"].diff()/np.timedelta64(1, 'D')
-
-                df_resultado = df_union_formulas_cedulas_siembra_blocks.groupby(["blocknumber","area","plantcant","finiciosiembra","finduccion"])["diff"].agg(num_aplicaciones="count",dias_prom="mean",max_dias="max",min_dias="min").reset_index().round(2)
-
+                df_resultado = df_union_formulas_cedulas_siembra_blocks.groupby(["blocknumber","area","plantcant","finiciosiembra","finduccion"])["diff"].agg(num_aplica=lambda ts: ts.count()+1,dias_prom ="mean",max_dias="max" ,apl_mas_de_15_dias=lambda ts: (ts > 15).sum()).reset_index().round(2)
+                #Ajuste de sumarle 1 al número de aplicaciones porque hace el resumen por columna diff que empieza con un valor nulo
 
                 ### Ajustes
 
                 df_resultado["finiciosiembra"]=df_resultado.finiciosiembra.dt.strftime('%d-%B-%Y')
                 df_resultado["finduccion"]=df_resultado.finduccion.dt.strftime('%d-%B-%Y')
-                df_resultado.rename(columns={"descripcion":"bloque"},inplace=True)
+                df_resultado.rename(columns={"blocknumber":"bloque"},inplace=True)
 
         return df_resultado
     except Exception as e:
@@ -241,11 +251,13 @@ def retorna_info_aplicaciones_preforza_por_bloque(bloque):
         df_union_formulas_cedulas.query("apldate<@finduccion",inplace=True)
 
         #Definir categoría de la aplicación
-        insumos_por_formulas_seleccionadas = pd.read_sql_query('''select codigo,insumo from formulas_det where codigo in %s ''',
-        con = connection,params =[tuple(set(df_union_formulas_cedulas.formula.to_list()))])
-        insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
-        categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","categorias_por_insumo"]].drop_duplicates()
-
+        if df_union_formulas_cedulas.empty==False:
+            insumos_por_formulas_seleccionadas = pd.read_sql_query('''select codigo,insumo from formulas_det where codigo in %s ''',
+            con = connection,params =[tuple(set(df_union_formulas_cedulas.formula.to_list()))])
+            insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
+            categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","categorias_por_insumo"]].drop_duplicates()
+        else:
+            return df_resultado_union_bloque_siembra
       
     return df_union_formulas_cedulas,categoria_por_aplicacion
   except Exception as e:
@@ -299,8 +311,10 @@ def retorna_info_aplicaciones_de_gs(bloque):
         df_categorias_agrupadas.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
         
         df_formulas_con_categorias = df_formulas.merge(df_categorias_agrupadas,how="left",on="formula")
+        #Filtro de fertilizante
+        df_formulas_con_categorias = df_formulas_con_categorias[df_formulas_con_categorias['categoria'].str.contains("Fertilizante")]
         df_formulas_con_categorias["diff"]=df_formulas_con_categorias["apldate"].diff()/np.timedelta64(1, 'D')
-        df_formulas_con_categorias = df_formulas_con_categorias[["formula","descripcion_formula","apldate","diff","etapa","categoria"]]
+        df_formulas_con_categorias = df_formulas_con_categorias[["formula","descripcion_formula","apldate","diff","categoria"]]
         df_formulas_con_categorias["apldate"]=df_formulas_con_categorias.apldate.dt.strftime('%d-%B-%Y')
 
         return df_formulas_con_categorias

@@ -23,12 +23,12 @@ def crear_filtro(df_grupos_siembra):
             id='bloque-nutricion-preforza-pc-dropdown',
             placeholder="Seleccione un bloque"
         ),
-        dbc.Row([ dbc.Col([html.H4("Resumen de aplicaciones por categoría")])]),
-        dbc.Row([ dbc.Col([dash_table.DataTable(
-        id='dt-resumen-aplicaciones-preforza-por-bloque')]),dbc.Col([dcc.Graph(id="graph-peso-planta")])]),
+        dbc.Row([ dbc.Col([html.H4("Detalle por bloque")])]),
+        dbc.Row([dbc.Col([dcc.Graph(id="graph-peso-planta")])]),
         
         html.H4("Detalle de aplicaciones"),
         dash_table.DataTable(
-        id='data-table-nutricion-preforza-pc-por-bloque')])
+        id='data-table-nutricion-preforza-pc-por-bloque')
+        ])
     return content
 
