@@ -6,6 +6,8 @@ import psycopg2
 import sqlalchemy
 from sqlalchemy import event
 import plotly.express as px
+import sys
+from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 
@@ -96,6 +98,11 @@ except Exception as e:
     connection.rollback()
 
 
+#############
+# Guardar en memoria aplicaciones del GS actual para no repetir query
+#############
+
+aplicaciones_gs_actual = pd.DataFrame(columns=["Seleccione","bloque"])
 
 #######################
 ## devuelve información de estados de los bloques de un lote
@@ -171,153 +178,219 @@ def retorna_info_bloques_de_gs(gs):
         bloques = pd.read_sql_query('''select codigo as blocknumber,descripcion,lote,area,gruposiembra from blocks where gruposiembra = %s''',
         con = connection,params = [gs])
         
-        if bloques.empty==False:
-            cedulas = pd.read_sql_query('''select codigo, blocknumber from MANTENIMIENTOCAMPOS_DETALLEBLOCKs where blocknumber in %s ''',
-            con = connection,params =[tuple(set(bloques.blocknumber.to_list()))])
-            siembra = pd.read_sql_query('''select blocknumber,plantcant,finiciosiembra,finduccion from siembra where blocknumber in %s ''',
-            con = connection,params =[tuple(set(bloques.blocknumber.to_list()))])
+        #Referenciar df en memoria
+        global aplicaciones_gs_actual
 
-            if cedulas.empty==False:
-                formulas = pd.read_sql_query('''select codigo,formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
-                #Unión de mantenimiento con mantenimiento campos
-                df_union_formulas_cedulas = formulas.merge(cedulas, how="inner",on="codigo")
-                df_union_formulas_cedulas.sort_values(by=["blocknumber","apldate"],inplace=True)
+        if bloques.empty:
+            print("no se encontraron bloques")
+            aplicaciones_gs_actual = df_resultado
+            return df_resultado
+
+
+        cedulas = pd.read_sql_query('''select codigo, blocknumber from MANTENIMIENTOCAMPOS_DETALLEBLOCKs where blocknumber in %s ''',
+        con = connection,params =[tuple(set(bloques.blocknumber.to_list()))])
+        siembra = pd.read_sql_query('''select blocknumber,plantcant,finiciosiembra,finduccion from siembra where blocknumber in %s ''',
+        con = connection,params =[tuple(set(bloques.blocknumber.to_list()))])
+
+        if cedulas.empty:
+            print("Hay bloques pero no cédulas de aplicación asociadas a esos bloques")
+            aplicaciones_gs_actual = df_resultado
+            return df_resultado
+
+        formulas = pd.read_sql_query('''select codigo,formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
+        
+        if formulas.empty:
+            print("Hay cédulas pero no cruzan con las fórmulas")
+            aplicaciones_gs_actual = df_resultado
+            return df_resultado
+
+        #Unión de cédulas con bloques afectados por aplicación
+        df_union_formulas_cedulas = formulas.merge(cedulas, how="inner",on="codigo")
+        df_union_formulas_cedulas.sort_values(by=["blocknumber","apldate"],inplace=True)
+        
+        #Left join con siembra y blocks para traer información general del bloque
+        df_union_formulas_cedulas_siembra = df_union_formulas_cedulas.merge(siembra,how="left",on="blocknumber")
+        df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra.merge(bloques,how="left",on="blocknumber")
+
+        #Filtro preforza
+        df_union_formulas_cedulas_siembra_blocks.query("apldate<finduccion or finduccion!=finduccion",inplace=True)
                 
-                #Left join con siembra y blocks
-                df_union_formulas_cedulas_siembra = df_union_formulas_cedulas.merge(siembra,how="left",on="blocknumber")
-                df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra.merge(bloques,how="left",on="blocknumber")
+        if df_union_formulas_cedulas_siembra_blocks.empty:
+            print("Hay aplicaciones en algún bloque del GS pero no preforza")
+            aplicaciones_gs_actual = df_resultado
+            return df_resultado
 
-                #Filtro preforza
-                df_union_formulas_cedulas_siembra_blocks.query("apldate<finduccion",inplace=True)
+        #Filtro nutrición
 
-                #Filtro nutrición
+        #Cruza las fórmulas preforza con sus insumos
+        insumos_por_formulas_seleccionadas = pd.read_sql_query('''
+        select t1.codigo,insumo,descripcion as descripcion_formula
+        from formulas_det as t1 
+        inner join formulas as t2
+        on t1.codigo=t2.codigo
+        where t1.codigo in %s ''',
+        con = connection,params =[tuple(set(df_union_formulas_cedulas_siembra_blocks.formula.to_list()))])
+        #Crea lista de las aplicaciones del GS que cruzan con la tabla de categorías
+        insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
+        categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","descripcion_formula","categorias_por_insumo"]].drop_duplicates()
+        categoria_por_aplicacion.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
 
-                #Definir categoría de la aplicación
-                insumos_por_formulas_seleccionadas = pd.read_sql_query('''select codigo,insumo from formulas_det where codigo in %s ''',
-                con = connection,params =[tuple(set(df_union_formulas_cedulas_siembra_blocks.formula.to_list()))])
-                insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
-                categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","categorias_por_insumo"]].drop_duplicates()
-                categoria_por_aplicacion.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
+        #Left join de las fórmulas del GS con las categorías correspondientes
+        df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks.merge(categoria_por_aplicacion,how="left",on="formula")
+        ####
+        ## Filtro únicamente de nutrición
+        ###
+        df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks[df_union_formulas_cedulas_siembra_blocks['categoria'].str.contains("Fertilizante")]
 
-                df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks.merge(categoria_por_aplicacion,how="left",on="formula")
-                df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks[df_union_formulas_cedulas_siembra_blocks['categoria'].str.contains("Fertilizante")]
-                #Días de diferencia
-                df_union_formulas_cedulas_siembra_blocks["diff"]=df_union_formulas_cedulas_siembra_blocks.groupby("blocknumber")["apldate"].diff()/np.timedelta64(1, 'D')
-                df_resultado = df_union_formulas_cedulas_siembra_blocks.groupby(["blocknumber","area","plantcant","finiciosiembra","finduccion"])["diff"].agg(num_aplica=lambda ts: ts.count()+1,dias_prom ="mean",max_dias="max" ,apl_mas_de_15_dias=lambda ts: (ts > 15).sum()).reset_index().round(2)
-                #Ajuste de sumarle 1 al número de aplicaciones porque hace el resumen por columna diff que empieza con un valor nulo
+        if df_union_formulas_cedulas_siembra_blocks.empty:
+            print("Hay aplicaciones preforza pero ninguna de nutrición")
+            aplicaciones_gs_actual = df_resultado
+            return df_resultado
+        
+        #Días de diferencia
+        df_union_formulas_cedulas_siembra_blocks["diff"]=df_union_formulas_cedulas_siembra_blocks.groupby("blocknumber")["apldate"].diff()/np.timedelta64(1, 'D')
+        #Guardar Query actual en memoria
+        aplicaciones_gs_actual = df_union_formulas_cedulas_siembra_blocks 
 
-                ### Ajustes
+        df_resultado = df_union_formulas_cedulas_siembra_blocks.groupby(["blocknumber",
+        "area","plantcant","finiciosiembra","finduccion"],
+        dropna=False)["diff"].agg(num_aplica=lambda ts: ts.count()+1,
+        dias_prom ="mean",max_dias="max" ,
+        apl_mas_de_15_dias=lambda ts: (ts > 15).sum()).reset_index().round(2)
 
-                df_resultado["finiciosiembra"]=df_resultado.finiciosiembra.dt.strftime('%d-%B-%Y')
-                df_resultado["finduccion"]=df_resultado.finduccion.dt.strftime('%d-%B-%Y')
-                df_resultado.rename(columns={"blocknumber":"bloque"},inplace=True)
+
+        #Ajuste de sumarle 1 al número de aplicaciones porque hace el resumen por columna diff que empieza con un valor nulo
+
+        ### Ajustes
+        if is_datetime(df_resultado["finiciosiembra"]):
+            df_resultado["finiciosiembra"]=df_resultado.finiciosiembra.dt.strftime('%d-%B-%Y')
+        if is_datetime(df_resultado["finduccion"]):
+            df_resultado["finduccion"]=df_resultado.finduccion.dt.strftime('%d-%B-%Y')
+
+        df_resultado.rename(columns={"blocknumber":"bloque"},inplace=True)
 
         return df_resultado
     except Exception as e:
 
         print("hubo un error", e)
+        print("Error on line {}".format(sys.exc_info()[-1].tb_lineno))
         connection.rollback()
         return df_resultado
 
 
-def retorna_info_aplicaciones_preforza_por_bloque(bloque):
+# def retorna_info_aplicaciones_preforza_por_bloque(bloque):
 
-  ## Extraer información tabla bloques:
-  df_resultado_union_bloque_siembra = pd.DataFrame(columns=["Seleccione","bloque"])
+#   ## Extraer información tabla bloques:
+#   df_resultado_union_bloque_siembra = pd.DataFrame(columns=["Seleccione","bloque"])
   
-  if bloque =="":
-      return df_resultado_union_bloque_siembra,df_resultado_union_bloque_siembra
+#   if bloque =="":
+#       return df_resultado_union_bloque_siembra,df_resultado_union_bloque_siembra
 
-  try:
+#   try:
     
-    cedulas = pd.read_sql_query('''select codigo from MANTENIMIENTOCAMPOS_DETALLEBLOCKs where blocknumber = %s ''',
-    con = connection,params =[bloque])
+#     cedulas = pd.read_sql_query('''select codigo from MANTENIMIENTOCAMPOS_DETALLEBLOCKs where blocknumber = %s ''',
+#     con = connection,params =[bloque])
 
-    if cedulas.empty==False:
-        finduccion = pd.read_sql_query('''select finduccion from siembra where blocknumber = %s ''',
-        con = connection,params =[bloque]).iat[0,0]
+#     if cedulas.empty==False:
+#         finduccion = pd.read_sql_query('''select finduccion from siembra where blocknumber = %s ''',
+#         con = connection,params =[bloque]).iat[0,0]
 
-        formulas = pd.read_sql_query('''select codigo, formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
-        detalle_formulas = pd.read_sql_query('''
-        select formula,t1.descripcion as descripcion_formula, t2.descripcion as etapa from 
-        (select codigo as formula, descripcion,etapa from formulas where codigo in %s) as t1
-        left join etapasaplicacion as t2 on  t1.etapa=t2.codigo
+#         formulas = pd.read_sql_query('''select codigo, formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
+#         detalle_formulas = pd.read_sql_query('''
+#         select formula,t1.descripcion as descripcion_formula, t2.descripcion as etapa from 
+#         (select codigo as formula, descripcion,etapa from formulas where codigo in %s) as t1
+#         left join etapasaplicacion as t2 on  t1.etapa=t2.codigo
         
-         ''', con = connection,params =[tuple(set(formulas.formula.to_list()))])
-        formulas_con_detalle = formulas.merge(detalle_formulas,how="left",on="formula")
+#          ''', con = connection,params =[tuple(set(formulas.formula.to_list()))])
+#         formulas_con_detalle = formulas.merge(detalle_formulas,how="left",on="formula")
 
-        df_union_formulas_cedulas = formulas_con_detalle.merge(cedulas, how="inner",on="codigo")
-        df_union_formulas_cedulas.sort_values(by=["apldate"],inplace=True)
-        df_union_formulas_cedulas.query("apldate<@finduccion",inplace=True)
+#         df_union_formulas_cedulas = formulas_con_detalle.merge(cedulas, how="inner",on="codigo")
+#         df_union_formulas_cedulas.sort_values(by=["apldate"],inplace=True)
+#         df_union_formulas_cedulas.query("apldate<@finduccion",inplace=True)
 
-        #Definir categoría de la aplicación
-        if df_union_formulas_cedulas.empty==False:
-            insumos_por_formulas_seleccionadas = pd.read_sql_query('''select codigo,insumo from formulas_det where codigo in %s ''',
-            con = connection,params =[tuple(set(df_union_formulas_cedulas.formula.to_list()))])
-            insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
-            categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","categorias_por_insumo"]].drop_duplicates()
-        else:
-            return df_resultado_union_bloque_siembra
+#         #Definir categoría de la aplicación
+#         if df_union_formulas_cedulas.empty==False:
+#             insumos_por_formulas_seleccionadas = pd.read_sql_query('''select codigo,insumo from formulas_det where codigo in %s ''',
+#             con = connection,params =[tuple(set(df_union_formulas_cedulas.formula.to_list()))])
+#             insumos_por_formulas_seleccionadas = insumos_por_formulas_seleccionadas.merge(categorias_insumos,how="inner",on="insumo")
+#             categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","categorias_por_insumo"]].drop_duplicates()
+#         else:
+#             return df_resultado_union_bloque_siembra
       
-    return df_union_formulas_cedulas,categoria_por_aplicacion
-  except Exception as e:
+#     return df_union_formulas_cedulas,categoria_por_aplicacion
+#   except Exception as e:
 
-      print("hubo un error", e)
-      connection.rollback()
-      return df_resultado_union_bloque_siembra,df_resultado_union_bloque_siembra
+#       print("hubo un error", e)
+#       connection.rollback()
+#       return df_resultado_union_bloque_siembra,df_resultado_union_bloque_siembra
 
 
-def retorna_resumen_aplicaciones_por_bloque(bloque):
+# def retorna_resumen_aplicaciones_por_bloque(bloque):
 
-    ## Extraer información tabla bloques:
-    df_formulas, df_categorias = retorna_info_aplicaciones_preforza_por_bloque(bloque)
+    
+#     ## Extraer información tabla bloques:
+#     df_formulas, df_categorias = retorna_info_aplicaciones_preforza_por_bloque(bloque)
   
-    if df_formulas.empty ==True:
-        return df_formulas
-    else: 
-        df_categorias.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
+#     if df_formulas.empty ==True:
+#         return df_formulas
+#     else: 
+#         df_categorias.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
         
-        df_formulas_con_categorias = df_formulas.merge(df_categorias,how="left",on="formula")
-        df_formulas_con_categorias = df_formulas_con_categorias[["apldate","categoria"]]
-        df_formulas_con_categorias.sort_values(by=["categoria","apldate"],inplace=True)
-        df_formulas_con_categorias["diff"]=df_formulas_con_categorias.groupby("categoria")["apldate"].diff()/np.timedelta64(1, 'D')
+#         df_formulas_con_categorias = df_formulas.merge(df_categorias,how="left",on="formula")
+#         df_formulas_con_categorias = df_formulas_con_categorias[["apldate","categoria"]]
+#         df_formulas_con_categorias.sort_values(by=["categoria","apldate"],inplace=True)
+#         df_formulas_con_categorias["diff"]=df_formulas_con_categorias.groupby("categoria")["apldate"].diff()/np.timedelta64(1, 'D')
 
-        df_resultado = df_formulas_con_categorias.groupby(["categoria"])["diff"].agg(num_aplicaciones="count",
-        dias_prom="mean",max_dias="max",min_dias="min").reset_index().round(2)
-        return df_resultado
+#         df_resultado = df_formulas_con_categorias.groupby(["categoria"])["diff"].agg(num_aplicaciones="count",
+#         dias_prom="mean",max_dias="max",min_dias="min").reset_index().round(2)
+#         return df_resultado
 
 
 
 def retorna_grafica_peso_planta(bloque):
     peso_planta_seleccionado = peso_planta.query("bloque==@bloque")
+    
     if peso_planta_seleccionado.empty:
 
-        df = pd.DataFrame(columns=["edad","promedio"])
+        df_peso_planta = pd.DataFrame(columns=["edad","promedio","fecha"])
     else:
-        df = peso_planta_seleccionado
+        
+        df_peso_planta = peso_planta_seleccionado.round(2)
     
-    fig = px.scatter(df, x="edad", y="promedio",title="Curva peso planta",labels={"edad":"edad","promedio":"peso planta promedio"})
+    fig = px.scatter(df_peso_planta, x="fecha", y="promedio",title="Curva peso planta",
+    labels={"edad":"edad","promedio":"peso planta promedio"},hover_data=["edad","promedio","fecha"])
+
+    fig.update_traces(marker=dict(size=12,
+                              line=dict(width=2,
+                                        color='DarkSlateGrey')),
+                  selector=dict(mode='markers'))
+    if bloque!="":
+        aplicaciones_bloque_actual = aplicaciones_gs_actual.query("blocknumber==@bloque")[["descripcion_formula","apldate"]]
+        for _,row in aplicaciones_bloque_actual.iterrows():
+            fig.add_shape(type='line',
+                        yref="y",
+                        xref="x",
+                        x0=row["apldate"],
+                        y0=0,
+                        x1=row["apldate"],
+                        y1=3000,
+                        line=dict(color='black', width=1))
     return fig
 
 def retorna_info_aplicaciones_de_gs(bloque):
 
-    ## Extraer información tabla bloques:
-    df_formulas, df_categorias = retorna_info_aplicaciones_preforza_por_bloque(bloque)
-  
-    if df_formulas.empty:
-        return df_formulas
-    else: 
-        df_categorias_agrupadas = df_categorias.groupby("codigo")["categorias_por_insumo"].apply(lambda x: ','.join(x)).reset_index()
-        df_categorias_agrupadas.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
-        
-        df_formulas_con_categorias = df_formulas.merge(df_categorias_agrupadas,how="left",on="formula")
-        #Filtro de fertilizante
-        df_formulas_con_categorias = df_formulas_con_categorias[df_formulas_con_categorias['categoria'].str.contains("Fertilizante")]
-        df_formulas_con_categorias["diff"]=df_formulas_con_categorias["apldate"].diff()/np.timedelta64(1, 'D')
-        df_formulas_con_categorias = df_formulas_con_categorias[["formula","descripcion_formula","apldate","diff","categoria"]]
-        df_formulas_con_categorias["apldate"]=df_formulas_con_categorias.apldate.dt.strftime('%d-%B-%Y')
+    if bloque =="" or aplicaciones_gs_actual.empty:
+      return pd.DataFrame(columns=["Seleccione","bloque"])
+    
+    aplicaciones_bloque_actual = aplicaciones_gs_actual.query("blocknumber==@bloque")
+    
+    if aplicaciones_bloque_actual.empty:
+        return pd.DataFrame(columns=["No hay","aplicaciones"])
+    
+    else:
+        aplicaciones_bloque_actual["apldate"]=aplicaciones_bloque_actual["apldate"].dt.strftime('%d-%B-%Y')
+        return aplicaciones_bloque_actual[["formula","descripcion_formula","apldate","diff","categoria"]]
 
-        return df_formulas_con_categorias
 
 def retorna_detalle_formula(formula):
     detalle_formula = pd.DataFrame(columns=["Seleccione","Fórmula"])
