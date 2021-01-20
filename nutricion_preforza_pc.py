@@ -18,7 +18,30 @@ def crear_filtro(df_grupos_siembra):
         html.Div(id='div-bloque-nutricion-preforza-pc',hidden=True),
         html.H3("Bloques por Grupo de Siembra"),
         dash_table.DataTable(
-        id='data-table-nutricion-preforza-pc'),
+        id='data-table-nutricion-preforza-pc',
+        style_header={
+        'whiteSpace': 'normal',
+        'height': 'auto',
+        'lineHeight': '15px'
+    },
+style_cell_conditional=[
+        {
+            'if': {'column_id': 'dias prom'},
+            'width': '50px'
+        },
+        {
+            'if': {'column_id':"num apls"},
+            'width': '50px'
+        },
+        {
+            'if': {'column_id':"max dias entre apls"},
+            'width': '50px'
+        },
+        {
+            'if': {'column_id':"num diffs mayor a 15"},
+            'width': '50px'
+        }
+    ],),
         dcc.Dropdown(
             id='bloque-nutricion-preforza-pc-dropdown',
             placeholder="Seleccione un bloque"

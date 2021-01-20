@@ -267,7 +267,9 @@ def retorna_info_bloques_de_gs(gs):
         if is_datetime(df_resultado["finduccion"]):
             df_resultado["finduccion"]=df_resultado.finduccion.dt.strftime('%d-%B-%Y')
 
-        df_resultado.rename(columns={"blocknumber":"bloque"},inplace=True)
+        df_resultado.rename(columns={"blocknumber":"bloque","finiciosiembra":"fsiembra",
+        "num_aplica":"num apls","dias_prom":"dias prom","plantcant":"poblacion","max_dias":"max dias entre apls",
+        "apl_mas_de_15_dias":"num diffs mayor a 15"},inplace=True)
 
         return df_resultado
     except Exception as e:
