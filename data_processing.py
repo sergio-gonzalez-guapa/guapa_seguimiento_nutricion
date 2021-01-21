@@ -1,6 +1,8 @@
 
 import pandas as pd 
 import numpy as np
+from datetime import datetime
+from datetime import timedelta  
 import locale 
 import psycopg2
 import sqlalchemy
@@ -39,6 +41,8 @@ categorias_insumos.dropna(subset=["categorias_por_insumo"],inplace=True)
 peso_planta = pd.read_excel("peso_planta.xlsx",dtype={"bloque":str},engine='openpyxl')
 peso_planta.sort_values(by=["bloque","edad"],inplace=True)
 
+calendario_aplicaciones = pd.read_excel("calendario_aplicaciones.xlsx")
+calendario_aplicaciones =calendario_aplicaciones[calendario_aplicaciones.aplicacion.str.contains('Foliar')]
 
 # ssl_args ={"sslmode":'verify-ca',"sslrootcert": "gcp postgres/server-ca.pem","sslcert": "gcp postgres/client-cert.pem","sslkey":"gcp postgres/client-key.pem"}
 # pool = sqlalchemy.create_engine(
@@ -99,10 +103,18 @@ except Exception as e:
 
 
 #############
-# Guardar en memoria aplicaciones del GS actual para no repetir query
+# Guardar en memoria aplicaciones del GS actual Y resumen para no repetir query
 #############
 
 aplicaciones_gs_actual = pd.DataFrame(columns=["Seleccione","bloque"])
+resumen_gs_actual = pd.DataFrame(columns=["Seleccione","bloque"])
+
+
+
+#######################
+## MÉTODOS ##############
+#####################
+########################################
 
 #######################
 ## devuelve información de estados de los bloques de un lote
@@ -180,10 +192,12 @@ def retorna_info_bloques_de_gs(gs):
         
         #Referenciar df en memoria
         global aplicaciones_gs_actual
+        global resumen_gs_actual
 
         if bloques.empty:
             print("no se encontraron bloques")
             aplicaciones_gs_actual = df_resultado
+            resumen_gs_actual = df_resultado
             return df_resultado
 
 
@@ -195,6 +209,7 @@ def retorna_info_bloques_de_gs(gs):
         if cedulas.empty:
             print("Hay bloques pero no cédulas de aplicación asociadas a esos bloques")
             aplicaciones_gs_actual = df_resultado
+            resumen_gs_actual = df_resultado
             return df_resultado
 
         formulas = pd.read_sql_query('''select codigo,formula,apldate from mantenimientocampos where codigo in %s  ''', con = connection,params =[tuple(set(cedulas.codigo.to_list()))])
@@ -202,6 +217,7 @@ def retorna_info_bloques_de_gs(gs):
         if formulas.empty:
             print("Hay cédulas pero no cruzan con las fórmulas")
             aplicaciones_gs_actual = df_resultado
+            resumen_gs_actual = df_resultado
             return df_resultado
 
         #Unión de cédulas con bloques afectados por aplicación
@@ -218,6 +234,7 @@ def retorna_info_bloques_de_gs(gs):
         if df_union_formulas_cedulas_siembra_blocks.empty:
             print("Hay aplicaciones en algún bloque del GS pero no preforza")
             aplicaciones_gs_actual = df_resultado
+            resumen_gs_actual = df_resultado
             return df_resultado
 
         #Filtro nutrición
@@ -245,6 +262,7 @@ def retorna_info_bloques_de_gs(gs):
         if df_union_formulas_cedulas_siembra_blocks.empty:
             print("Hay aplicaciones preforza pero ninguna de nutrición")
             aplicaciones_gs_actual = df_resultado
+            resumen_gs_actual = df_resultado
             return df_resultado
         
         #Días de diferencia
@@ -271,6 +289,7 @@ def retorna_info_bloques_de_gs(gs):
         "num_aplica":"num apls","dias_prom":"dias prom","plantcant":"poblacion","max_dias":"max dias entre apls",
         "apl_mas_de_15_dias":"num diffs mayor a 15"},inplace=True)
 
+        resumen_gs_actual = df_resultado
         return df_resultado
     except Exception as e:
 
@@ -380,7 +399,7 @@ def retorna_grafica_peso_planta(bloque):
     return fig
 
 def retorna_info_aplicaciones_de_gs(bloque):
-
+    
     if bloque =="" or aplicaciones_gs_actual.empty:
       return pd.DataFrame(columns=["Seleccione","bloque"])
     
@@ -391,7 +410,18 @@ def retorna_info_aplicaciones_de_gs(bloque):
     
     else:
         aplicaciones_bloque_actual["apldate"]=aplicaciones_bloque_actual["apldate"].dt.strftime('%d-%B-%Y')
-        return aplicaciones_bloque_actual[["formula","descripcion_formula","apldate","diff","categoria"]]
+        #aplicaciones_bloque_actual[["formula","descripcion_formula","apldate","diff","categoria"]]
+        
+        fecha_siembra_actual =  datetime.strptime(resumen_gs_actual.at[0,"fsiembra"], '%d-%B-%Y')
+        calendario_aplicaciones["fecha_programada"] = calendario_aplicaciones["dias"].apply(lambda x: fecha_siembra_actual + timedelta(days=x))
+
+        resultado = calendario_aplicaciones[["aplicacion","fecha_programada"]].reset_index(drop=True).merge(aplicaciones_bloque_actual[["descripcion_formula","apldate","diff"]].reset_index(drop=True),
+        left_index=True, right_index=True,how="outer")
+
+        resultado["fecha_programada"]=resultado["fecha_programada"].dt.strftime('%d-%B-%Y')
+
+        resultado.columns = ["aplicacion programada","fecha programada","aplicacion ejecutada","fecha ejecutada", "diff"]
+        return resultado
 
 
 def retorna_detalle_formula(formula):
