@@ -14,6 +14,11 @@ def crear_filtro(df):
         ),
         html.H3("Información general de bloque")
         ,
-        html.Div(dash_table.DataTable(id='data-table-info-bloque'))
+        html.Div(dash_table.DataTable(id='data-table-info-bloque',
+        style_header={'backgroundColor': 'rgb(30, 30, 30)'},
+        style_cell={
+        'backgroundColor': 'rgb(50, 50, 50)',
+        'color': 'white'
+    }))
     ])
     return content

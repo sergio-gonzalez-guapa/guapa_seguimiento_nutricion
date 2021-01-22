@@ -29,7 +29,7 @@ SIDEBAR_STYLE = {
     'bottom': 0,
     'width': '20%',     # this sizes the left hand side of the board to 20%
     'padding': '20px 10px',
-    'background-color': '#f8f9fa'   # this means a light gray
+    'background-color': 'black'   # this means a light gray
 }
 
 # the style arguments for the main content page.
@@ -42,7 +42,7 @@ CONTENT_STYLE = {
 
 TEXT_STYLE = {
     'textAlign': 'center',
-    'color': '#191970'    # Midnight blue
+    'color': 'white'    # Midnight blue
 }
 
 CARD_TEXT_STYLE = {
@@ -53,10 +53,10 @@ CARD_TEXT_STYLE = {
 
 sidebar = html.Div(
     [
-        html.H2("Menu", className="display-4"),
+        html.H2("Menu", className="display-4", style={"color":"white"}),
         html.Hr(),
         html.P(
-            "Seleccione la acción que desea ejecutar", className="lead"
+            "Seleccione la acción que desea ejecutar", className="lead",style={"color":"white"}
         ),
         dbc.Nav(
             [

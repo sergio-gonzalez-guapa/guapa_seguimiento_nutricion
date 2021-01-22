@@ -230,7 +230,7 @@ def retorna_info_bloques_de_gs(gs):
 
         #Filtro preforza
         df_union_formulas_cedulas_siembra_blocks.query("apldate<finduccion or finduccion!=finduccion",inplace=True)
-                
+        
         if df_union_formulas_cedulas_siembra_blocks.empty:
             print("Hay aplicaciones en algún bloque del GS pero no preforza")
             aplicaciones_gs_actual = df_resultado
@@ -252,6 +252,9 @@ def retorna_info_bloques_de_gs(gs):
         categoria_por_aplicacion = insumos_por_formulas_seleccionadas[["codigo","descripcion_formula","categorias_por_insumo"]].drop_duplicates()
         categoria_por_aplicacion.rename(columns={"codigo":"formula","categorias_por_insumo":"categoria"},inplace=True)
 
+        ## Tener cuidado acá porque categorias_por_aplicacion tiene aplicaciones 
+
+        
         #Left join de las fórmulas del GS con las categorías correspondientes
         df_union_formulas_cedulas_siembra_blocks = df_union_formulas_cedulas_siembra_blocks.merge(categoria_por_aplicacion,how="left",on="formula")
         ####
