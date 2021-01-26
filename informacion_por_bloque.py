@@ -17,7 +17,7 @@ def crear_filtro(df):
         html.Div(dash_table.DataTable(id='data-table-info-bloque',
         style_header={'backgroundColor': 'rgb(30, 30, 30)'},
         style_cell={
-        'backgroundColor': 'rgb(50, 50, 50)',
+        'backgroundColor': 'rgb(36, 178, 38)',
         'color': 'white'
     }))
     ])

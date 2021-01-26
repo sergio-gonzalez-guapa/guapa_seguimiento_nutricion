@@ -173,14 +173,28 @@ def actualizar_year(bloque):
 #Actualizar data table agregado según los div de gs y bloque
 @app.callback(
     [Output('data-table-nutricion-preforza-pc', 'data'),
-    Output('data-table-nutricion-preforza-pc', 'columns')],
+    Output('data-table-nutricion-preforza-pc', 'columns'),
+    Output('data-table-nutricion-preforza-pc', 'tooltip_data')],
     [Input('div-gs-nutricion-preforza-pc', 'children')])
 def actualizar_bloques_nutricion_preforza_pc(gs):
 
+
     data = retorna_info_bloques_de_gs(gs)
-    _cols=[{"name": i, "id": i} for i in data.columns]
-    data_as_dict = data.to_dict('records')
-    return data_as_dict,_cols
+    cols_after_drop = [c for c in data.columns if c.startswith("tooltip")==False]
+    _cols=[{"name": i, "id": i} for i in cols_after_drop]
+    
+    data_as_dict = data[cols_after_drop].to_dict('records')
+
+    tooltip_data=[
+        {
+            "q1": {'value': row["tooltip_q1"], 'type': 'markdown'},
+            "q2": {'value': row["tooltip_q2"], 'type': 'markdown'},
+            "q3": {'value': row["tooltip_q3"], 'type': 'markdown'},
+            "q4": {'value': row["tooltip_q4"], 'type': 'markdown'}
+        } for row in data.to_dict('records')
+    ]
+
+    return data_as_dict,_cols,tooltip_data
 
 
 #Actualizar data table con el resumen de aplicaciones por categoria y bloque seleccionado
