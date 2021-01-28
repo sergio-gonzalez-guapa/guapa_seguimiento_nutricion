@@ -85,6 +85,7 @@ except Exception as e:
 #############
 
 aplicaciones_gs_actual = pd.DataFrame(columns=["Seleccione","bloque"])
+#resumen_gs_actual es un df que se usa por ahora solo para guardar la fecha de siembra
 resumen_gs_actual = pd.DataFrame(columns=["Seleccione","bloque"])
 
 
@@ -139,15 +140,18 @@ def group_by_por_trimestre (df,trimestre):
     
     #Ajustar como proporciones del total ejecutado
     #Cuando salga división por 0: resultado["menos_de_10"].divide(resultado["conteo"], fill_value=0)
-    resultado["menos_de_10"] = 1-(resultado["abs_menos_de_10"]/resultado["abs_conteo"])
-    resultado["mas_de_20"] = 1-(resultado["abs_mas_de_20"]/resultado["abs_conteo"])
+    resultado["menos_de_10"] = resultado["abs_menos_de_10"]/resultado["abs_conteo"]
+    resultado["mas_de_20"] = resultado["abs_mas_de_20"]/resultado["abs_conteo"]
     resultado["conteo"] = resultado["abs_conteo"].apply(lambda x: 1 if x>6 else x/6 )
-    resultado["q"+ str(trimestre)] = resultado["menos_de_10"]*0.2 + resultado["mas_de_20"]*0.2 + resultado["conteo"]*0.6
+    resultado["q"+ str(trimestre)] =resultado.apply(lambda row: 0 if (row ["menos_de_10"]+row["mas_de_20"]>0.7) or (row["conteo"]<0.8) else 1 ,axis=1 )
     
     resultado["tooltip_q"+str(trimestre)] = resultado.apply(lambda row: f"aplicaciones con menos de 10 días de diferencia: {row['abs_menos_de_10']} de {row['abs_conteo']} \n aplicaciones con más de 20 días de diferencia {row['abs_mas_de_20']} de {row['abs_conteo']} \n  Aplicaciones faltantes vs plan: {6-row['abs_conteo']} ",axis=1)
     
-    resultado.drop(["menos_de_10","mas_de_20","conteo","abs_menos_de_10",
-    "abs_mas_de_20","abs_conteo"],axis=1,inplace=True)
+    resultado.rename(columns={"abs_menos_de_10":"abs_menos_de_10_q" +str(trimestre),
+    "abs_mas_de_20":"abs_mas_de_20_q" +str(trimestre),
+    "abs_conteo":"abs_conteo_q" +str(trimestre)
+    }, inplace=True)
+    resultado.drop(["menos_de_10","mas_de_20","conteo"],axis=1,inplace=True)
 
 
     return resultado.rename(columns={"blocknumber":"bloque"}).round(2)
@@ -252,26 +256,21 @@ def retorna_info_bloques_de_gs(gs):
         
         #Días de diferencia
         df_union_formulas_cedulas_siembra_blocks["diff"]=df_union_formulas_cedulas_siembra_blocks.groupby("blocknumber")["apldate"].diff()/np.timedelta64(1, 'D')
+        
+        #Ajuste para agregar diff a primera aplicación desde siembra
+        fill_value = (df_union_formulas_cedulas_siembra_blocks["apldate"]- df_union_formulas_cedulas_siembra_blocks["finiciosiembra"])/np.timedelta64(1, 'D')
+        df_union_formulas_cedulas_siembra_blocks["diff"] = df_union_formulas_cedulas_siembra_blocks["diff"].fillna(fill_value)
+
         #Guardar Query actual en memoria
         aplicaciones_gs_actual = df_union_formulas_cedulas_siembra_blocks 
 
         agg_dict = {
-    "num apls": pd.NamedAgg(column='apldate', aggfunc=lambda ts: ts.count()),
-    "dias hasta 1ra aplic.": pd.NamedAgg(column='apldate', aggfunc='min'),
-    #"diff prom": pd.NamedAgg(column='diff', aggfunc="mean"),
-    #"var diff": pd.NamedAgg(column='diff', aggfunc="var"),
-    #"menos de 10": pd.NamedAgg(column='diff', aggfunc=lambda ts: (ts <10).sum()),
-    #"mas de 20": pd.NamedAgg(column='diff', aggfunc=lambda ts: (ts > 20).sum())
+    "num apls": pd.NamedAgg(column='apldate', aggfunc=lambda ts: ts.count())
 }
 
         df_resultado = df_union_formulas_cedulas_siembra_blocks.groupby(["blocknumber",
         "area","plantcant","finiciosiembra","finduccion"],dropna=False).agg(**agg_dict).reset_index().round(2)
         
-
-
-        ### Ajustes. Se deja primero el de días de diferencia antes de pasar fsiembra a string
-        if is_datetime(df_resultado["dias hasta 1ra aplic."]):
-            df_resultado["dias hasta 1ra aplic."]=(df_resultado["dias hasta 1ra aplic."]-df_resultado["finiciosiembra"])/ np.timedelta64(1, 'D')
 
         if is_datetime(df_resultado["finiciosiembra"]):
             df_resultado["finiciosiembra"]=df_resultado.finiciosiembra.dt.strftime('%d-%B-%Y')
@@ -284,13 +283,16 @@ def retorna_info_bloques_de_gs(gs):
         df_resultado.rename(columns={"blocknumber":"bloque","finiciosiembra":"fsiembra",
         "plantcant":"poblacion","area":"area (ha)"},inplace=True)
 
-        resumen_gs_actual = df_resultado
+        
         #Agregar df auxiliar por trimestres
 
         df_resultados_por_trimestre = crear_dfs_auxiliares_trimestrales(df_union_formulas_cedulas_siembra_blocks)
         df_resultado = df_resultado.merge(df_resultados_por_trimestre, on="bloque",how="left")
-
-        return df_resultado
+        
+        resumen_gs_actual = df_resultado
+        #Se eliminan estas columnas porque no se desean en df_resultado pero si en resumen_gs_ctual
+        columns_to_drop = [x for x in df_resultado.columns if x.startswith('abs')]
+        return df_resultado.drop(columns_to_drop,axis=1)
     except Exception as e:
 
         print("hubo un error", e)
@@ -298,6 +300,41 @@ def retorna_info_bloques_de_gs(gs):
         connection.rollback()
         return df_resultado
 
+
+def crear_df_trimestral_transpuesto (df,trimestre):
+    trim = str(trimestre)
+    columnas = [x for x in df.columns if "q"+trim in x]
+    df_trim = df[columnas]
+    df_trim.columns = [x[4:-3] for x in df_trim.columns]
+    df_trim= df_trim.transpose()
+    df_trim.columns=["q"+trim]
+    return df_trim
+
+
+def retorna_detalle_calidad_nutricion_pc_preforza(bloque):
+
+    columnas = [x for x in resumen_gs_actual.columns if x.startswith("abs")]
+    if not columnas:
+        return pd.DataFrame(columns=["No hay ","aplicaciones"])
+    
+    bloque_seleccionado = resumen_gs_actual.query("bloque==@bloque")[columnas]
+
+    if bloque_seleccionado.empty:
+        return pd.DataFrame(columns=["No hay ","aplicaciones asociadas al bloque"])
+
+
+    df_q1 = crear_df_trimestral_transpuesto(bloque_seleccionado,1)
+    df_q2 = crear_df_trimestral_transpuesto(bloque_seleccionado,2)
+    df_q3 = crear_df_trimestral_transpuesto(bloque_seleccionado,3)
+    df_q4 = crear_df_trimestral_transpuesto(bloque_seleccionado,4)
+    
+    dfs_a_unir = [df_q2,df_q3,df_q4]
+
+    for data_frame in dfs_a_unir:
+        if not data_frame.empty:
+            df_q1 = df_q1.merge(data_frame, left_index=True,right_index=True,how="left")
+
+    return df_q1.reset_index().rename(columns={"index":"métrica"})
 
 
 def retorna_grafica_peso_planta(bloque):
@@ -313,12 +350,39 @@ def retorna_grafica_peso_planta(bloque):
     fig = px.scatter(df_peso_planta, x="fecha", y="promedio",title="Curva peso planta",
     labels={"edad":"edad","promedio":"peso planta promedio"},hover_data=["edad","promedio","fecha"])
 
+    #Modifica tamaño de puntos
     fig.update_traces(marker=dict(size=12,
                               line=dict(width=2,
                                         color='DarkSlateGrey')),
                   selector=dict(mode='markers'))
+
+    fig.update_xaxes(
+        dtick=1209600000,
+        tickformat="Semana %U-%b\n%Y")
+
+    fig.add_annotation(
+    xref="paper",
+    yref="y",
+    x=1,
+    y=500,
+    showarrow=False,
+    text="aplicaciones",
+    bgcolor="black"
+)
+    fig.add_annotation(
+    xref="paper",
+    yref="y",
+    x=1,
+    y=0,
+    showarrow=False,
+    text="trimestres",
+    bgcolor="red"
+)
+
     if bloque!="":
-        aplicaciones_bloque_actual = aplicaciones_gs_actual.query("blocknumber==@bloque")[["descripcion_formula","apldate"]]
+        aplicaciones_bloque_actual = aplicaciones_gs_actual.query("blocknumber==@bloque")[["descripcion_formula","apldate","finiciosiembra"]]
+        fsiembra = aplicaciones_bloque_actual.finiciosiembra.max()
+
         for _,row in aplicaciones_bloque_actual.iterrows():
             fig.add_shape(type='line',
                         yref="y",
@@ -328,6 +392,22 @@ def retorna_grafica_peso_planta(bloque):
                         x1=row["apldate"],
                         y1=3000,
                         line=dict(color='black', width=1))
+
+        #Agregar línas de trimestres
+        
+        trimestres = [fsiembra + pd.DateOffset(weeks=12*x) for x in range (1,4)]
+
+        for fecha in trimestres:
+            fig.add_shape(type='line',
+                        yref="y",
+                        xref="x",
+                        x0=fecha,
+                        y0=0,
+                        x1=fecha,
+                        y1=3000,
+                        line=dict(color='red', width=1))
+
+
     return fig
 
 def retorna_info_aplicaciones_de_gs(bloque):
@@ -345,6 +425,7 @@ def retorna_info_aplicaciones_de_gs(bloque):
         #aplicaciones_bloque_actual[["formula","descripcion_formula","apldate","diff","categoria"]]
         
         fecha_siembra_actual =  datetime.strptime(resumen_gs_actual.at[0,"fsiembra"], '%d-%B-%Y')
+        #La fecha de siembra actual se usa para construir fechas programadas según paquete tecnológico
         calendario_aplicaciones["fecha_programada"] = calendario_aplicaciones["dias"].apply(lambda x: fecha_siembra_actual + timedelta(days=x))
 
         resultado = calendario_aplicaciones[["aplicacion","fecha_programada"]].reset_index(drop=True).merge(aplicaciones_bloque_actual[["descripcion_formula","apldate","diff"]].reset_index(drop=True),

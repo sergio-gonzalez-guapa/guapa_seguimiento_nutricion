@@ -13,7 +13,7 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import json
 
-from data_processing import df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula, lotes_historia,retorna_info_estados_bloques,retorna_grafica_peso_planta
+from data_processing import df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula, lotes_historia,retorna_info_estados_bloques,retorna_grafica_peso_planta,retorna_detalle_calidad_nutricion_pc_preforza
 import upload_file
 import insumos_por_formula
 import agregar_comentario
@@ -197,18 +197,18 @@ def actualizar_bloques_nutricion_preforza_pc(gs):
     return data_as_dict,_cols,tooltip_data
 
 
-#Actualizar data table con el resumen de aplicaciones por categoria y bloque seleccionado
-#Tener en cuenta para cuando vuelva a poner de nuevo el resumen de todas las aplicaciones
-# @app.callback(
-#     [Output('dt-resumen-aplicaciones-preforza-por-bloque', 'data'),
-#     Output('dt-resumen-aplicaciones-preforza-por-bloque', 'columns')],
-#     [Input('div-bloque-nutricion-preforza-pc', 'children')])
-# def actualizar_resumen_aplicaciones_preforza(bloque):
-    
-#     data = retorna_resumen_aplicaciones_por_bloque(bloque)
-#     _cols=[{"name": i, "id": i} for i in data.columns]
-#     data_as_dict = data.to_dict('records')
-#     return data_as_dict,_cols
+#Actualizar detalle indicador de calidad nutrición preforza pc
+@app.callback(
+    [Output('dt-calidad-nutricion-preforza-pc-bloque', 'data'),
+    Output('dt-calidad-nutricion-preforza-pc-bloque', 'columns')],
+    [Input('div-bloque-nutricion-preforza-pc', 'children')])
+def actualizar_detalle_calidad_nutricion_preforza_pc(bloque):
+    data = retorna_detalle_calidad_nutricion_pc_preforza(bloque)
+    _cols=[{"name": i, "id": i} for i in data.columns]
+    data_as_dict = data.to_dict('records')
+
+    return data_as_dict,_cols
+
 
 
 #Actualizar gráfica de peso planta
