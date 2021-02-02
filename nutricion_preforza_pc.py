@@ -24,6 +24,7 @@ def crear_filtro(df_grupos_siembra):
         'rule': 'background-color: white; font-family: monospace; font-size: 15px;  width: max-content; max-width: 200px; top: 100%;left: 50%;margin-left: -60px; white-space: pre-wrap;'
     }],
     tooltip_duration =None,
+    merge_duplicate_headers=True,
         style_header={
         'whiteSpace': 'normal',
         'height': 'auto',
@@ -32,85 +33,85 @@ def crear_filtro(df_grupos_siembra):
             style_data_conditional=[
             {
             'if': {
-                'filter_query': '{q1} > 0.7 && {q1} <= 1',
-                'column_id': 'q1'
+                'filter_query': '{t1} > 0.7 && {t1} <= 1',
+                'column_id': 't1'
                 },
                 'backgroundColor': 'green'
             },
             {
             'if': {
-                'filter_query': '{q1} > 0.5 && {q1} <= 0.7',
-                'column_id': 'q1'
+                'filter_query': '{t1} > 0.5 && {t1} <= 0.7',
+                'column_id': 't1'
                 },
                 'backgroundColor': 'yellow'
             },
             {
             'if': {
-                'filter_query': '{q1} >= 0 && {q1} <= 0.5',
-                'column_id': 'q1'
+                'filter_query': '{t1} >= 0 && {t1} <= 0.5',
+                'column_id': 't1'
                 },
                 'backgroundColor': 'red'
             },
             {
             'if': {
-                'filter_query': '{q2} > 0.7 && {q2} <= 1',
-                'column_id': 'q2'
+                'filter_query': '{t2} > 0.7 && {t2} <= 1',
+                'column_id': 't2'
                 },
                 'backgroundColor': 'green'
             },
             {
             'if': {
-                'filter_query': '{q2} > 0.5 && {q2} <= 0.7',
-                'column_id': 'q2'
+                'filter_query': '{t2} > 0.5 && {t2} <= 0.7',
+                'column_id': 't2'
                 },
                 'backgroundColor': 'yellow'
             },
             {
             'if': {
-                'filter_query': '{q2} >= 0 && {q2} <= 0.5',
-                'column_id': 'q2'
+                'filter_query': '{t2} >= 0 && {t2} <= 0.5',
+                'column_id': 't2'
                 },
                 'backgroundColor': 'red'
             },
             {
             'if': {
-                'filter_query': '{q3} > 0.7 && {q3} <= 1',
-                'column_id': 'q3'
+                'filter_query': '{t3} > 0.7 && {t3} <= 1',
+                'column_id': 't3'
                 },
                 'backgroundColor': 'green'
             },
             {
             'if': {
-                'filter_query': '{q3} > 0.5 && {q3} <= 0.7',
-                'column_id': 'q3'
+                'filter_query': '{t3} > 0.5 && {t3} <= 0.7',
+                'column_id': 't3'
                 },
                 'backgroundColor': 'yellow'
             },
             {
             'if': {
-                'filter_query': '{q3} >= 0 && {q3} <= 0.5',
-                'column_id': 'q3'
+                'filter_query': '{t3} >= 0 && {t3} <= 0.5',
+                'column_id': 't3'
                 },
                 'backgroundColor': 'red'
             },
             {
             'if': {
-                'filter_query': '{q4} > 0.7 && {q4} <= 1',
-                'column_id': 'q4'
+                'filter_query': '{t4} > 0.7 && {t4} <= 1',
+                'column_id': 't4'
                 },
                 'backgroundColor': 'green'
             },
             {
             'if': {
-                'filter_query': '{q4} > 0.5 && {q4} <= 0.7',
-                'column_id': 'q4'
+                'filter_query': '{t4} > 0.5 && {t4} <= 0.7',
+                'column_id': 't4'
                 },
                 'backgroundColor': 'yellow'
             },
             {
             'if': {
-                'filter_query': '{q4} >= 0 && {q4} <= 0.5',
-                'column_id': 'q4'
+                'filter_query': '{t4} >= 0 && {t4} <= 0.5',
+                'column_id': 't4'
                 },
                 'backgroundColor': 'red'
             },
@@ -123,7 +124,15 @@ def crear_filtro(df_grupos_siembra):
         ),
         dbc.Row([ dbc.Col([html.H4("Resumen por bloque")])]),
         dbc.Row([
-            dbc.Col([ dash_table.DataTable(id='dt-calidad-nutricion-preforza-pc-bloque')]), 
+            dbc.Col([ html.H6("Indicador de calidad abierto por métrica y trimestre"),
+            dash_table.DataTable(id='dt-calidad-nutricion-preforza-pc-bloque',
+            merge_duplicate_headers=True,
+            style_cell={
+        'whiteSpace': 'normal',
+        'height': 'auto',
+        'lineHeight': '15px',
+        'maxWidth': 70
+    })]), 
             dbc.Col([dcc.Graph(id="graph-peso-planta", config={
         'displayModeBar': False
     } )],width =9)
@@ -132,7 +141,14 @@ def crear_filtro(df_grupos_siembra):
         
         html.H4("Detalle de aplicaciones"),
         dash_table.DataTable(
-        id='data-table-nutricion-preforza-pc-por-bloque')
-        ])
+        id='data-table-nutricion-preforza-pc-por-bloque',
+        merge_duplicate_headers=True,
+        style_header={
+        'whiteSpace': 'normal',
+        'height': 'auto',
+        'lineHeight': '15px'},
+        style_cell={'width':'50px'})
+        ],
+        )
     return content
 

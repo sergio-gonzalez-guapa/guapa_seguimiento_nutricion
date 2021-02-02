@@ -19,6 +19,7 @@ import insumos_por_formula
 import agregar_comentario
 import informacion_por_bloque
 import nutricion_preforza_pc
+import ultimas_aplicaciones_nutricion_preforza_pc
 
 
 # the style arguments for the sidebar
@@ -62,7 +63,8 @@ sidebar = html.Div(
             [
                 dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
                 dbc.NavLink("Aplicaciones nutrición preforza PC", href="/page-2", id="page-2-link"),
-                dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link")
+                dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link"),
+                dbc.NavLink("Ultimas aplicaciones nutricion preforza ", href="/page-4", id="page-4-link")
             ],
             vertical=True,
             pills=True,
@@ -84,14 +86,14 @@ app.layout = html.Div([dcc.Location(id="url"),sidebar, content])                
 # this callback uses the current pathname to set the active state of the
 # corresponding nav link to true, allowing users to tell see page they are on
 @app.callback(
-    [Output(f"page-{i}-link", "active") for i in range(1, 4)],
+    [Output(f"page-{i}-link", "active") for i in range(1, 5)],
     [Input("url", "pathname")],
 )
 def toggle_active_links(pathname):
     if pathname == "/":
         # Treat page 1 as the homepage / index
-        return True, False, False
-    return [pathname == f"/page-{i}" for i in range(1, 4)]
+        return True, False, False,False 
+    return [pathname == f"/page-{i}" for i in range(1, 5)]
 
 ######################################
 ## URL callback
@@ -106,6 +108,9 @@ def render_page_content(pathname):
 
     elif pathname == "/page-3":
         return insumos_por_formula.crear_filtro(df_formulas)
+
+    elif pathname=="/page-4":
+        return ultimas_aplicaciones_nutricion_preforza_pc.crear_filtro()
     # If the user tries to reach a different page, return a 404 message
     else:
         return dbc.Jumbotron(
@@ -180,9 +185,8 @@ def actualizar_bloques_nutricion_preforza_pc(gs):
 
 
     data = retorna_info_bloques_de_gs(gs)
-    cols_after_drop = [c for c in data.columns if c.startswith("tooltip")==False]
-    _cols=[{"name": i, "id": i} for i in cols_after_drop]
-    
+    cols_after_drop = [c for c in data.columns if c.startswith("tooltip")==False]    
+    _cols=[{"name": ["Indicador de calidad por trimestre",i], "id": i} if i.startswith("t") else {"name": ["Información general de bloque",i], "id": i} for i in cols_after_drop]
     data_as_dict = data[cols_after_drop].to_dict('records')
 
     tooltip_data=[
@@ -204,7 +208,7 @@ def actualizar_bloques_nutricion_preforza_pc(gs):
     [Input('div-bloque-nutricion-preforza-pc', 'children')])
 def actualizar_detalle_calidad_nutricion_preforza_pc(bloque):
     data = retorna_detalle_calidad_nutricion_pc_preforza(bloque)
-    _cols=[{"name": i, "id": i} for i in data.columns]
+    _cols=[{"name": ["# de aplicaciones por trimestre",i], "id": i} if i.startswith("t") else {"name": ["",i], "id": i} for i in data.columns]
     data_as_dict = data.to_dict('records')
 
     return data_as_dict,_cols
@@ -228,7 +232,7 @@ def actualizar_peso_planta_preforza(bloque):
 def actualizar_aplicaciones_bloques_nutricion_preforza_pc(bloque):
     
     data = retorna_info_aplicaciones_de_gs(bloque)
-    _cols=[{"name": i, "id": i} for i in data.columns]
+    _cols=[{"name": ["Planeación de aplicaciones",i], "id": i} if "programada" in i else {"name": ["Ejecución de aplicaciones",i], "id": i} for i in data.columns]
     data_as_dict = data.to_dict('records')
     return data_as_dict,_cols
 

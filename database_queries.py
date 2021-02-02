@@ -105,6 +105,52 @@ on t1.codigo=t2.codigo
 where t1.codigo in %s 
 '''
 
+info_bloques = '''
+    SELECT
+    blocknumber,
+	t1.descripcion
+    ,finiciosiembra::date as fecha_siembra
+    ,case when t3.fecha is not null then DATE_PART('day',t3.fecha::timestamp - finiciosiembra::timestamp)
+    else 0 
+    end AS dias_hasta_siembra_grupo
+    ,case when t4.fecha>finduccion then t4.fecha::date else finduccion::date
+     end as finduccion
+    ,case when
+    DATE_PART('day',fpoda::timestamp - finduccion::timestamp)>250 then
+     t5.fecha::date
+      else fpoda::date
+      end as fecha_sm1
+
+    ,t7.fecha::date as fecha_inicio_sc
+    ,t6.fecha::date as finduccion2
+	,plantcant as poblacion
+	,area
+    ,drenajes/area as drenajes
+    ,t3.descripcion as grupo_siembra
+    ,t4.descripcion as grupo_forza
+    ,t5.descripcion as grupo_semillero
+    ,t6.descripcion as grupo_forza2
+    ,t7.descripcion as grupo_cosecha2
+	,t8.descripcion as rango_semilla
+  FROM blocks as t1
+  inner join siembra as t2
+  on t1.codigo = t2.blocknumber
+  left join grupossiembra as t3
+  on t1.gruposiembra=t3.codigo
+  left join gruposforza as t4
+  on t1.grupoforza=t4.codigo
+  left join grupossemillero as t5
+  on t1.gruposemillero=t5.codigo
+  left join gruposforza2 as t6
+  on t1.grupoforza2=t6.codigo
+  left join grupos2dacosecha as t7
+  on t1.grupo2dacosecha=t7.codigo
+  left join tipossemilla as t8
+  on t2.seedtype=t8.codigo
+  where drenajes<area
+  order by finiciosiembra
+  '''
+
 # ssl_args ={"sslmode":'verify-ca',"sslrootcert": "gcp postgres/server-ca.pem","sslcert": "gcp postgres/client-cert.pem","sslkey":"gcp postgres/client-key.pem"}
 # pool = sqlalchemy.create_engine(
 #     # Equivalent URL:

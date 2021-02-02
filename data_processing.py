@@ -143,7 +143,7 @@ def group_by_por_trimestre (df,trimestre):
     resultado["menos_de_10"] = resultado["abs_menos_de_10"]/resultado["abs_conteo"]
     resultado["mas_de_20"] = resultado["abs_mas_de_20"]/resultado["abs_conteo"]
     resultado["conteo"] = resultado["abs_conteo"].apply(lambda x: 1 if x>6 else x/6 )
-    resultado["q"+ str(trimestre)] =resultado.apply(lambda row: 0 if (row ["menos_de_10"]+row["mas_de_20"]>0.7) or (row["conteo"]<0.8) else 1 ,axis=1 )
+    resultado["t"+ str(trimestre)] =resultado.apply(lambda row: 0 if (row ["menos_de_10"]+row["mas_de_20"]>0.7) or (row["conteo"]<0.8) else 1 ,axis=1 )
     
     resultado["tooltip_q"+str(trimestre)] = resultado.apply(lambda row: f"aplicaciones con menos de 10 días de diferencia: {row['abs_menos_de_10']} de {row['abs_conteo']} \n aplicaciones con más de 20 días de diferencia {row['abs_mas_de_20']} de {row['abs_conteo']} \n  Aplicaciones faltantes vs plan: {6-row['abs_conteo']} ",axis=1)
     
@@ -271,6 +271,8 @@ def retorna_info_bloques_de_gs(gs):
         df_resultado = df_union_formulas_cedulas_siembra_blocks.groupby(["blocknumber",
         "area","plantcant","finiciosiembra","finduccion"],dropna=False).agg(**agg_dict).reset_index().round(2)
         
+        #Calcular edad de forza antes de cambiar formato de fechas
+        df_resultado["edad forza (meses)"]=((df_resultado.finduccion - df_resultado.finiciosiembra)/np.timedelta64(1, 'M')).round(2)
 
         if is_datetime(df_resultado["finiciosiembra"]):
             df_resultado["finiciosiembra"]=df_resultado.finiciosiembra.dt.strftime('%d-%B-%Y')
@@ -281,7 +283,7 @@ def retorna_info_bloques_de_gs(gs):
         df_resultado["area"]= (df_resultado["area"]/10000).round(2)
 
         df_resultado.rename(columns={"blocknumber":"bloque","finiciosiembra":"fsiembra",
-        "plantcant":"poblacion","area":"area (ha)"},inplace=True)
+        "plantcant":"población","area":"área (ha)"},inplace=True)
 
         
         #Agregar df auxiliar por trimestres
@@ -291,7 +293,8 @@ def retorna_info_bloques_de_gs(gs):
         
         resumen_gs_actual = df_resultado
         #Se eliminan estas columnas porque no se desean en df_resultado pero si en resumen_gs_ctual
-        columns_to_drop = [x for x in df_resultado.columns if x.startswith('abs')]
+        columns_to_drop = [x for x in df_resultado.columns if (x.startswith('abs')) or x=="num apls"]
+
         return df_resultado.drop(columns_to_drop,axis=1)
     except Exception as e:
 
@@ -302,12 +305,13 @@ def retorna_info_bloques_de_gs(gs):
 
 
 def crear_df_trimestral_transpuesto (df,trimestre):
+    #Trimestre de número a string
     trim = str(trimestre)
     columnas = [x for x in df.columns if "q"+trim in x]
     df_trim = df[columnas]
     df_trim.columns = [x[4:-3] for x in df_trim.columns]
     df_trim= df_trim.transpose()
-    df_trim.columns=["q"+trim]
+    df_trim.columns=["t"+trim]
     return df_trim
 
 
@@ -334,7 +338,14 @@ def retorna_detalle_calidad_nutricion_pc_preforza(bloque):
         if not data_frame.empty:
             df_q1 = df_q1.merge(data_frame, left_index=True,right_index=True,how="left")
 
-    return df_q1.reset_index().rename(columns={"index":"métrica"})
+    df_resultado = df_q1.reset_index().rename(columns={"index":"métrica"})
+
+    df_resultado['métrica'] = df_resultado['métrica'].str.replace('menos_de_10','con menos de 10 días diferencia')
+    df_resultado['métrica'] = df_resultado['métrica'].str.replace('mas_de_20','con más de 20 días diferencia')
+    df_resultado['métrica'] = df_resultado['métrica'].str.replace('conteo','realizadas en total')
+
+
+    return df_resultado
 
 
 def retorna_grafica_peso_planta(bloque):
@@ -433,7 +444,7 @@ def retorna_info_aplicaciones_de_gs(bloque):
 
         resultado["fecha_programada"]=resultado["fecha_programada"].dt.strftime('%d-%B-%Y')
 
-        resultado.columns = ["aplicacion programada","fecha programada","aplicacion ejecutada","fecha ejecutada", "diff"]
+        resultado.columns = ["aplicacion programada","fecha programada","aplicacion ejecutada","fecha ejecutada", "días desde última aplicación "]
         return resultado
 
 
@@ -473,6 +484,56 @@ def retorna_detalle_formula(formula):
         print("hubo un error", e)
         connection.rollback()
         return detalle_formula
+
+def retorna_ultimas_aplicaciones_nutricion_preforza_pc():
+    try:
+        info_bloques = pd.read_sql_query(query.info_bloques,connection)
+        info_bloques.query("finduccion!=finduccion",inplace=True)
+        categorias_insumos_temp = categorias_insumos.query("categorias_por_insumo=='Fertilizante'")
+        
+        cedulas_por_bloque = pd.read_sql_query(query.cedulas,connection,params =[tuple(set(info_bloques.blocknumber.to_list()))])
+        formulas_nutricion  = '''
+        select distinct codigo
+        from formulas_det where insumo in %s 
+        '''
+        aplicaciones_nutricion = pd.read_sql_query(formulas_nutricion,connection,params =[tuple(set(categorias_insumos_temp.insumo.unique()))])
+        aplicaciones_validas = '''
+        select codigo,
+        formula,
+        apldate 
+        from mantenimientocampos 
+        where codigo in %s and formula in %s and apldate>'2020-01-01'::date
+        '''
+        cedulas_utilizadas = pd.read_sql_query(aplicaciones_validas,connection,params =[tuple(set(cedulas_por_bloque.codigo.unique())),tuple(set(aplicaciones_nutricion.codigo.unique()))])
+
+        total_aplicaciones_nutricion = cedulas_utilizadas.merge(cedulas_por_bloque,how="left",on="codigo")
+        total_aplicaciones_nutricion.sort_values(by=["blocknumber","apldate"],inplace=True)
+        total_aplicaciones_nutricion.drop_duplicates(subset="blocknumber",keep="last",inplace=True)
+
+        nombres_formulas_query = '''
+        select codigo as formula,
+        descripcion as nombre_formula
+        from formulas 
+        where codigo in %s
+        '''
+
+        descripcion_formulas_nutricion = pd.read_sql_query(nombres_formulas_query,connection,params =[tuple(set(total_aplicaciones_nutricion.formula.unique()))])
+
+        
+        total_aplicaciones_nutricion_nombradas = total_aplicaciones_nutricion.merge(descripcion_formulas_nutricion,
+        on="formula",how="left").merge(info_bloques[["blocknumber","descripcion","grupo_siembra"]].rename(columns={"descripcion":"bloque"}),on="blocknumber",how="left")
+        total_aplicaciones_nutricion_nombradas.sort_values(by="apldate",inplace=True)
+        total_aplicaciones_nutricion_nombradas["hoy"]= datetime.today()
+        total_aplicaciones_nutricion_nombradas["dias_desde_ultima_aplicacion"]=(total_aplicaciones_nutricion_nombradas["hoy"]-total_aplicaciones_nutricion_nombradas["apldate"]).dt.days
+        total_aplicaciones_nutricion_nombradas["apldate"]= total_aplicaciones_nutricion_nombradas["apldate"].dt.strftime('%d-%B-%Y')
+        total_aplicaciones_nutricion_nombradas.drop(["codigo","formula","blocknumber","hoy"],axis=1,inplace=True)
+
+        return total_aplicaciones_nutricion_nombradas
+        
+    except Exception as e:
+        print("hubo un error",e)
+        connection.rollback()
+
 
 
 
