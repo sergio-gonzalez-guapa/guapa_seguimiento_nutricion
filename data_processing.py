@@ -7,6 +7,7 @@ from datetime import timedelta
 import locale 
 import psycopg2
 import sqlalchemy
+import credentials as cred
 import database_queries as query
 from functools import reduce
 from sqlalchemy import event
@@ -16,23 +17,16 @@ from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 
-#Conexión PPC remota
-try:
-    connection = psycopg2.connect(user="postgres",
-                                    password="Guapa.2020*",
-                                    host="35.237.147.235",
-                                    port="5432",
-                                    database='ppc',
-                                    sslmode='verify-ca',
-                                    sslrootcert= "gcp postgres/server-ca.pem",
-                                    sslcert = "gcp postgres/client-cert.pem",
-                                    sslkey = "gcp postgres/client-key.pem")
+connection = psycopg2.connect(user=cred.user,
+                                password=cred.password,
+                                host=cred.host,
+                                port=cred.port,
+                                database=cred.database,
+                                sslmode=cred.sslmode,
+                                connect_timeout=cred.connect_timeout,
+                                sslrootcert = cred.sslrootcert)
 
-    cursor = connection.cursor()
-
-except Exception as e:
-    print(e)
-    print("Conexión fallida por red")
+cursor = connection.cursor()
 
 
 #######################
@@ -59,17 +53,22 @@ except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
+else:
+    connection.commit()
 
 ## Extraer información grupos de siembra
 try:
     grupossiembra = pd.read_sql_query(query.grupossiembra,connection)
+    df_grupos_siembra = grupossiembra[["codigo","descripcion"]]
     
 except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
+else:
+    connection.commit()
 
-df_grupos_siembra = grupossiembra[["codigo","descripcion"]]
+
 
 ## Extraer información de fórmulas
 try:
@@ -78,6 +77,8 @@ except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
+else:
+    connection.commit()
 
 
 #############

@@ -130,3 +130,6 @@ dmypy.json
 
 #SSH files
 *.pem
+
+#Credentials
+credentials.py
