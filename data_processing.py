@@ -13,6 +13,7 @@ from functools import reduce
 from sqlalchemy import event
 import plotly.express as px
 import sys
+import traceback
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
 locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
@@ -138,6 +139,7 @@ def group_by_por_trimestre (df,trimestre):
     "abs_conteo": pd.NamedAgg(column='apldate', aggfunc=lambda ts: ts.count()),
 }
     resultado = df.groupby(["blocknumber"],dropna=False).agg(**agg_dict).reset_index().round(2)
+    #Qué pasa si el df está vacío?
     
     #Ajustar como proporciones del total ejecutado
     #Cuando salga división por 0: resultado["menos_de_10"].divide(resultado["conteo"], fill_value=0)
@@ -165,15 +167,25 @@ def crear_dfs_auxiliares_trimestrales(df):
     aplicaciones_q3 =  df[(df['apldate'] > df['finiciosiembra'] + timedelta(weeks=24)) & (df['apldate'] <= df['finiciosiembra'] + timedelta(weeks=36)) ]
     aplicaciones_q4 = df[(df['apldate'] > df['finiciosiembra'] + timedelta(weeks=36))]
 
-    df_q1 = group_by_por_trimestre(aplicaciones_q1,1)
-    df_q2 = group_by_por_trimestre(aplicaciones_q2,2)
-    df_q3 = group_by_por_trimestre(aplicaciones_q3,3)
-    df_q4 = group_by_por_trimestre(aplicaciones_q4,4)
+    data_frames = []
+    if aplicaciones_q1.empty==False:
+        data_frames.append(group_by_por_trimestre(aplicaciones_q1,1))
+    
+    if aplicaciones_q2.empty==False:
+        data_frames.append(group_by_por_trimestre(aplicaciones_q2,2))
 
-    data_frames = [df_q1, df_q2, df_q3,df_q4]
+    if aplicaciones_q3.empty==False:
+        data_frames.append(group_by_por_trimestre(aplicaciones_q3,3))
 
-    df_merged = reduce(lambda  left,right: pd.merge(left,right,on=["bloque"],
+    if aplicaciones_q4.empty==False:
+        data_frames.append(group_by_por_trimestre(aplicaciones_q4,4))
+
+    if data_frames:
+        df_merged = reduce(lambda  left,right: pd.merge(left,right,on=["bloque"],
                                             how='outer'), data_frames)
+    else:
+        df_merged = pd.DataFrame(columns=["no hay","aplicaciones"])
+        
     return df_merged
 
 def retorna_info_bloques_de_gs(gs):
@@ -273,7 +285,8 @@ def retorna_info_bloques_de_gs(gs):
         "area","plantcant","finiciosiembra","finduccion"],dropna=False).agg(**agg_dict).reset_index().round(2)
         
         #Calcular edad de forza antes de cambiar formato de fechas
-        df_resultado["edad forza (meses)"]=((df_resultado.finduccion - df_resultado.finiciosiembra)/np.timedelta64(1, 'M')).round(2)
+        df_resultado["edad forza (meses)"]=(pd.to_datetime(df_resultado["finduccion"]) - df_resultado["finiciosiembra"]).apply(lambda x: x if pd.isnull(x) else (x/np.timedelta64(1, 'M')) )
+        df_resultado = df_resultado.round({"edad forza (meses)":2})
 
         if is_datetime(df_resultado["finiciosiembra"]):
             df_resultado["finiciosiembra"]=df_resultado.finiciosiembra.dt.strftime('%d-%B-%Y')
@@ -301,6 +314,11 @@ def retorna_info_bloques_de_gs(gs):
 
         print("hubo un error", e)
         print("Error on line {}".format(sys.exc_info()[-1].tb_lineno))
+        print ('print_exc():')
+        traceback.print_exc(file=sys.stdout)
+        print ('print_exc(1):')
+        traceback.print_exc(limit=1, file=sys.stdout)
+
         connection.rollback()
         return df_resultado
 

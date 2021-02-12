@@ -178,8 +178,7 @@ def actualizar_year(bloque):
 #Actualizar data table agregado según los div de gs y bloque
 @app.callback(
     [Output('data-table-nutricion-preforza-pc', 'data'),
-    Output('data-table-nutricion-preforza-pc', 'columns'),
-    Output('data-table-nutricion-preforza-pc', 'tooltip_data')],
+    Output('data-table-nutricion-preforza-pc', 'columns')],
     [Input('div-gs-nutricion-preforza-pc', 'children')])
 def actualizar_bloques_nutricion_preforza_pc(gs):
 
@@ -189,16 +188,16 @@ def actualizar_bloques_nutricion_preforza_pc(gs):
     _cols=[{"name": ["Indicador de calidad por trimestre",i], "id": i} if i.startswith("t") else {"name": ["Información general de bloque",i], "id": i} for i in cols_after_drop]
     data_as_dict = data[cols_after_drop].to_dict('records')
 
-    tooltip_data=[
-        {
-            "q1": {'value': row["tooltip_q1"], 'type': 'markdown'},
-            "q2": {'value': row["tooltip_q2"], 'type': 'markdown'},
-            "q3": {'value': row["tooltip_q3"], 'type': 'markdown'},
-            "q4": {'value': row["tooltip_q4"], 'type': 'markdown'}
-        } for row in data.to_dict('records')
-    ]
+    # tooltip_data=[
+    #     {
+    #         "q1": {'value': row["tooltip_q1"], 'type': 'markdown'},
+    #         "q2": {'value': row["tooltip_q2"], 'type': 'markdown'},
+    #         "q3": {'value': row["tooltip_q3"], 'type': 'markdown'},
+    #         "q4": {'value': row["tooltip_q4"], 'type': 'markdown'}
+    #     } for row in data.to_dict('records')
+    # ]
 
-    return data_as_dict,_cols,tooltip_data
+    return data_as_dict,_cols
 
 
 #Actualizar detalle indicador de calidad nutrición preforza pc
