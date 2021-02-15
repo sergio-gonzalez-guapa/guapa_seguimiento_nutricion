@@ -54,8 +54,6 @@ except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
-else:
-    connection.commit()
 
 ## Extraer información grupos de siembra
 try:
@@ -66,8 +64,6 @@ except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
-else:
-    connection.commit()
 
 
 
@@ -78,8 +74,6 @@ except Exception as e:
 
     print("hubo un error", e)
     connection.rollback()
-else:
-    connection.commit()
 
 
 #############
