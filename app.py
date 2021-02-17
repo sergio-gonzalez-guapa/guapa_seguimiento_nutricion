@@ -12,6 +12,8 @@ from urllib.request import urlopen
 from dash.dependencies import Input, Output, State
 import plotly.express as px
 import json
+import base64
+import io
 
 from data_processing import df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula, lotes_historia,retorna_info_estados_bloques,retorna_grafica_peso_planta,retorna_detalle_calidad_nutricion_pc_preforza
 import upload_file
@@ -20,6 +22,7 @@ import agregar_comentario
 import informacion_por_bloque
 import nutricion_preforza_pc
 import ultimas_aplicaciones_nutricion_preforza_pc
+import cargue_peso_planta as cpp
 
 
 # the style arguments for the sidebar
@@ -64,7 +67,8 @@ sidebar = html.Div(
                 dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
                 dbc.NavLink("Aplicaciones nutrición preforza PC", href="/page-2", id="page-2-link"),
                 dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link"),
-                dbc.NavLink("Ultimas aplicaciones nutricion preforza ", href="/page-4", id="page-4-link")
+                dbc.NavLink("Ultimas aplicaciones nutrición preforza ", href="/page-4", id="page-4-link"),
+                dbc.NavLink("Cargue peso planta", href="/page-5", id="page-5-link")
             ],
             vertical=True,
             pills=True,
@@ -86,14 +90,14 @@ app.layout = html.Div([dcc.Location(id="url"),sidebar, content])                
 # this callback uses the current pathname to set the active state of the
 # corresponding nav link to true, allowing users to tell see page they are on
 @app.callback(
-    [Output(f"page-{i}-link", "active") for i in range(1, 5)],
+    [Output(f"page-{i}-link", "active") for i in range(1, 6)],
     [Input("url", "pathname")],
 )
 def toggle_active_links(pathname):
     if pathname == "/":
         # Treat page 1 as the homepage / index
-        return True, False, False,False 
-    return [pathname == f"/page-{i}" for i in range(1, 5)]
+        return True, False, False,False, False  #AGREGAR UN FALSE MÀS CADA VEZ QUE SE AGREGA PAGINA
+    return [pathname == f"/page-{i}" for i in range(1, 6)]
 
 ######################################
 ## URL callback
@@ -112,6 +116,9 @@ def render_page_content(pathname):
     elif pathname=="/page-4":
         return ultimas_aplicaciones_nutricion_preforza_pc.crear_filtro()
     # If the user tries to reach a different page, return a 404 message
+    elif pathname=="/page-5":
+        return cpp.layout
+    # If the user tries to reach a different page, return a 404 message
     else:
         return dbc.Jumbotron(
         [
@@ -120,18 +127,6 @@ def render_page_content(pathname):
             html.P(f"The pathname {pathname} was not recognised..."),
         ]
     )
-
-
-@app.callback(Output('output-data-upload', 'children'),
-              [Input('upload-data', 'contents')],
-              [State('upload-data', 'filename'),
-               State('upload-data', 'last_modified')])
-def update_output(list_of_contents, list_of_names, list_of_dates):
-    if list_of_contents is not None:
-        children = [
-            upload_file.parse_contents(c, n, d) for c, n, d in
-            zip(list_of_contents, list_of_names, list_of_dates)]
-        return children
 
 
 ###
@@ -262,6 +257,49 @@ def actualizar_insumos_por_formula(formula):
     
     return data_as_dict,_cols,tooltip_data
 
+
+### Cargue peso planta
+@app.callback([Output('data-table-cargue-peso-planta', 'data'),
+    Output('data-table-cargue-peso-planta', 'columns')],
+              [Input("upload-cargue-peso-planta", 'filename'),
+              Input("upload-cargue-peso-planta", 'contents')])
+def update_output(filename,contents):
+    
+    data = pd.DataFrame(columns=["Seleccione","un archivo"]) 
+    if filename is not None:
+        content_type, content_string = contents.split(',')
+        decoded = base64.b64decode(content_string)
+        
+        if 'xls' in filename:
+            df = pd.read_excel(io.BytesIO(decoded))
+            
+            columnas_seleccionadas = ["PC o RC",'Fecha del muestreo']
+            muestras = [x for x in df.columns if (x.lower().startswith("m")) and x.lower().startswith("mu")==False]
+            columnas_seleccionadas.extend(muestras)
+
+
+            df_peso_forza= df[columnas_seleccionadas].melt(id_vars=["PC o RC", 'Fecha del muestreo'], var_name="muestra",value_name="valor" )
+            df_peso_forza.dropna(inplace=True)
+
+
+            agg_dict = {
+                "media" : pd.NamedAgg(column='valor', aggfunc=lambda ts: ts.mean() ),
+                "desviación": pd.NamedAgg(column='valor', aggfunc=lambda ts: (ts >20).sum()),
+                "conteo": pd.NamedAgg(column='valor', aggfunc=lambda ts: ts.count()),
+            }
+
+            df_resultado = df_peso_forza.groupby(["PC o RC",'Fecha del muestreo'],dropna=True).agg(**agg_dict).reset_index().round(0)
+            df_resultado.sort_values(by=["PC o RC", "Fecha del muestreo"],inplace=True)
+            df_resultado.drop_duplicates(subset="PC o RC",keep="last",inplace=True)
+            df_resultado["PC o RC"]=df_resultado["PC o RC"].str.upper()
+            data = df_resultado.tail(20)
+        
+        else:
+            data = pd.DataFrame(columns=["El archivo debe","ser de excel"]) 
+    
+    _cols=[{"name": i, "id": i} for i in data.columns]
+    data_as_dict = data.to_dict('records')
+    return data.to_dict('records'),_cols
 
 
 if __name__ == '__main__':
