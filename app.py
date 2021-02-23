@@ -14,6 +14,7 @@ import plotly.express as px
 import json
 import base64
 import io
+import nutricion_preforza_pc_resumen_gs as nppcgs
 
 from data_processing import df_grupos_siembra,retorna_bloques_de_gs,retorna_info_bloques_de_gs,retorna_info_aplicaciones_de_gs,df_formulas,retorna_detalle_formula, lotes_historia,retorna_info_estados_bloques,retorna_grafica_peso_planta,retorna_detalle_calidad_nutricion_pc_preforza
 import upload_file
@@ -65,10 +66,11 @@ sidebar = html.Div(
         dbc.Nav(
             [
                 dbc.NavLink("Información de bloques", href="/page-1", id="page-1-link"),
-                dbc.NavLink("Aplicaciones nutrición preforza PC", href="/page-2", id="page-2-link"),
-                dbc.NavLink("Insumos por fórmula", href="/page-3", id="page-3-link"),
-                dbc.NavLink("Ultimas aplicaciones nutrición preforza ", href="/page-4", id="page-4-link"),
-                dbc.NavLink("Cargue peso planta", href="/page-5", id="page-5-link")
+                dbc.NavLink("Resumen nutrición preforza por grupo de siembra", href="/page-2", id="page-2-link"),
+                dbc.NavLink("Aplicaciones nutrición preforza PC", href="/page-3", id="page-3-link"),
+                dbc.NavLink("Insumos por fórmula", href="/page-4", id="page-4-link"),
+                dbc.NavLink("Ultimas aplicaciones nutrición preforza ", href="/page-5", id="page-5-link"),
+                dbc.NavLink("Cargue peso planta", href="/page-6", id="page-6-link")
             ],
             vertical=True,
             pills=True,
@@ -90,14 +92,14 @@ app.layout = html.Div([dcc.Location(id="url"),sidebar, content])                
 # this callback uses the current pathname to set the active state of the
 # corresponding nav link to true, allowing users to tell see page they are on
 @app.callback(
-    [Output(f"page-{i}-link", "active") for i in range(1, 6)],
+    [Output(f"page-{i}-link", "active") for i in range(1, 7)],
     [Input("url", "pathname")],
 )
 def toggle_active_links(pathname):
     if pathname == "/":
         # Treat page 1 as the homepage / index
-        return True, False, False,False, False  #AGREGAR UN FALSE MÀS CADA VEZ QUE SE AGREGA PAGINA
-    return [pathname == f"/page-{i}" for i in range(1, 6)]
+        return True, False, False,False, False, False  #AGREGAR UN FALSE MÀS CADA VEZ QUE SE AGREGA PAGINA
+    return [pathname == f"/page-{i}" for i in range(1, 7)]
 
 ######################################
 ## URL callback
@@ -108,15 +110,17 @@ def render_page_content(pathname):
     if pathname in ["/", "/page-1"]:
         return informacion_por_bloque.crear_filtro(lotes_historia)
     elif pathname == "/page-2":
+        return nppcgs.form
+    elif pathname == "/page-3":
         return nutricion_preforza_pc.crear_filtro(df_grupos_siembra)
 
-    elif pathname == "/page-3":
+    elif pathname == "/page-4":
         return insumos_por_formula.crear_filtro(df_formulas)
 
-    elif pathname=="/page-4":
+    elif pathname=="/page-5":
         return ultimas_aplicaciones_nutricion_preforza_pc.crear_filtro()
     # If the user tries to reach a different page, return a 404 message
-    elif pathname=="/page-5":
+    elif pathname=="/page-6":
         return cpp.layout
     # If the user tries to reach a different page, return a 404 message
     else:

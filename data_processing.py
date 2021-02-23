@@ -16,7 +16,7 @@ import sys
 import traceback
 from pandas.api.types import is_datetime64_any_dtype as is_datetime
 
-locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
+#locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 
 connection = psycopg2.connect(user=cred.user,
                                 password=cred.password,
