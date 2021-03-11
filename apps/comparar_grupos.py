@@ -1,8 +1,14 @@
-import dash_bootstrap_components as dbc
-import dash
-import dash_html_components as html
 import dash_core_components as dcc
+import dash_bootstrap_components as dbc
+import dash_html_components as html
 import pandas as pd
+from dash.dependencies import Input, Output
+
+from app import app
+
+
+
+#Elementos filtro
 year_input = dbc.FormGroup(
     [
         dbc.Label("Año", html_for="nutricion-preforza-year"),
@@ -12,12 +18,7 @@ year_input = dbc.FormGroup(
         max=2021,
         step=1,
         value=[2014, 2021],
-        marks={
-        2014: '2014',
-        2016: '2016',
-        2018: '2018',
-        2020: '2020'
-    }
+        marks={ i:str(i) for i in range(2014,2022)}
     ),
         dbc.FormText(
             "Seleccione un rango de años",
@@ -37,8 +38,16 @@ month_input = dbc.FormGroup(
         value=[1, 12],
         marks={
         1: 'enero',
+        2: 'febrero',
+        3: 'marzo',
         4: 'abril',
+        5: 'mayo',
+        6: 'junio',
+        7: 'julio',
         8: 'agosto',
+        9: 'septiembre',
+        10: 'octubre',
+        11: 'noviembre',
         12: 'diciembre'
     }
     ),
@@ -60,10 +69,10 @@ radios_estado_forza = dbc.FormGroup(
                     {"label": "Parcialmente forzado","value": 3},
                 ],
             ),
-            width=10,
+            width=8,
         ),
     ],
-    row=True,
+    row=False,
 )
 
 check_calidad_aplicacion = dbc.FormGroup(
@@ -77,10 +86,10 @@ check_calidad_aplicacion = dbc.FormGroup(
                     {"label": "Baja", "value": 2}
                 ],
             ),
-            width=10,
+            width=8,
         ),
     ],
-    row=True,
+    row=False,
 )
 
 boton_aplicar_filtros = dbc.FormGroup(
@@ -113,5 +122,62 @@ tabla = html.Table(
     ) 
 
 
-form = dbc.Form([year_input, month_input,radios_estado_forza,check_calidad_aplicacion,
-                boton_aplicar_filtros,tabla])
+form_sliders = dbc.Form([year_input, month_input])
+
+form_checboxes =dbc.Row(
+    [
+        dbc.Col(radios_estado_forza),
+        dbc.Col(check_calidad_aplicacion)
+    ],
+    form=True
+)
+
+form_boton = dbc.Form([boton_aplicar_filtros])
+
+#Estructura de tablas
+df_nutricion = pd.DataFrame(
+    {
+        "Grupo de siembra": ["GS2020", "GS2120", "GS2220", "GS2320"],
+        "Indicador de calidad": ["alta", "alta", "baja", "baja"],
+    }
+)
+
+df_proteccion = pd.DataFrame(
+    {
+        "First Name": ["Protección", "Ford", "Zaphod", "Trillian"],
+        "Last Name": ["Dent", "Prefect", "Beeblebrox", "Astra"],
+    }
+)
+
+df_herbicida = pd.DataFrame(
+    {
+        "First Name": ["Herbicida", "Ford", "Zaphod", "Trillian"],
+        "Last Name": ["Dent", "Prefect", "Beeblebrox", "Astra"],
+    }
+)
+
+def crear_tabla(hash):
+    if hash=="#proteccion":
+        df = df_proteccion
+    elif hash=="#herbicida":
+        df = df_herbicida
+    else:
+        df =df_nutricion
+
+    return [form_sliders,form_checboxes,form_boton,dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True,size="md")]
+
+def crear_layout (hash="nutricion"):
+
+    
+
+    content = dbc.Card(
+    dbc.CardBody(
+        [
+            form_sliders,
+            html.Div(crear_tabla(hash),id = "comparar-grupos-content")
+        ]
+    ),
+    className="mt-3"
+)
+    return content
+

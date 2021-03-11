@@ -1,8 +1,15 @@
-import dash_html_components as html
 import dash_core_components as dcc
-import base64
+import dash_bootstrap_components as dbc
+import dash_html_components as html
 import pandas as pd
+from dash.dependencies import Input, Output
+import base64
 import dash_table
+import io
+from app import app
+from .layouts_predefinidos import elementos 
+
+
 
 
 layout = html.Div([
@@ -20,13 +27,15 @@ layout = html.Div([
                 "textAlign": "center",
                 "margin": "10px",
             }),
-dash_table.DataTable(id="data-table-cargue-peso-planta")]
+html.Div(id="data-table-cargue-peso-planta")]
 )
 
-def parse_contents(contents, filename, date):
+def parse_contents(contents, filename, date=None):
+    
     content_type, content_string = contents.split(',')
 
     decoded = base64.b64decode(content_string)
+    print("decodifica el contenido")
     try:
         if 'xlsx' in filename:
             # Assume that the user uploaded an excel file
@@ -42,6 +51,7 @@ def parse_contents(contents, filename, date):
         ])
     
     else:
+        
         columnas_seleccionadas = ["PC o RC",'Fecha del muestreo']
         muestras = [x for x in df.columns if (x.lower().startswith("m")) and x.lower().startswith("mu")==False]
         columnas_seleccionadas.extend(muestras)
@@ -79,3 +89,11 @@ def parse_contents(contents, filename, date):
             'wordBreak': 'break-all'
         })
     ])
+
+# @app.callback(Output("data-table-cargue-peso-planta", "children"),
+#  [Input("upload-cargue-peso-planta", 'filename'),
+#               Input("upload-cargue-peso-planta", 'contents')])
+# def actualizar_tabla(contents, filename):
+#     print("entra a este actualizar tabla")
+
+#     return parse_contents(contents,filename)
