@@ -7,7 +7,7 @@ from dash.dependencies import Input, Output, State
 import plotly.express as px
 import numpy as np
 import db_connection
-from app import app
+from app import app,cache
 from .layouts_predefinidos import elementos 
 import locale 
 
@@ -124,6 +124,7 @@ def actualizar_select_lote(path):
 Output("aplicaciones-bloque-graph", "figure")],
  [Input("select-bloque", "value")],
  [State("url","pathname"),State("url","hash")])
+@cache.memoize()
 def actualizar_tabla(bloque, path, hash):
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]

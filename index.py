@@ -10,7 +10,7 @@ from apps import calidad_aplicaciones_compartido as shared
 from apps import comparar_grupos as cg
 from apps import detalle_grupo as dg
 from apps import detalle_bloque as db
-# from apps import programacion_aplicaciones as pa
+from apps import programacion_aplicaciones as pa
 from apps import cargue_muestreos as cm
 
 from db_connection import crear_nueva_conexion
@@ -102,11 +102,11 @@ def display_page(pathname):
         return 'Home', 'Home'     
 
     if pathname == '/estado-bloques':
-        #eb.actualizar_data()
         return eb.layout.salida, 'estado-bloques'
 
-    # if pathname == '/programacion-aplicaciones':
-    #     return pa.layout
+    if pathname == '/programacion-aplicaciones':
+        return pa.layout.salida, 'programacion-aplicaciones'
+
     if pathname == '/cargue-muestreos':
         return cm.layout, 'cargue_muestreos'
     

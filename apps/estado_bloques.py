@@ -2,7 +2,7 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import pandas as pd
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output,State
 from .layouts_predefinidos import elementos 
 
 from app import app
@@ -59,9 +59,12 @@ def query_para_tabla(lote):
     html.Thead(html.Tr([ html.Th(col) for col in consulta.columns]))]
 
     rows = []
-    for _,row in consulta.iterrows():
+    for row in consulta.itertuples(index=False):
         #Aquí debo poner la lógica los anchor para el vínculo que me lleve al grupo correspondiente
-        new_row = html.Tr([html.Td(col) for col in row])
+        dict_tuple = row._asdict()
+        
+        new_row = html.Tr([ html.Td(v) if k!='_2' else html.Td(dcc.Link(v,href=f"/preforza-detalle-grupo?gs={v}") ) for k,v in dict_tuple.items() ])
+        
         rows.append(new_row)
     
     table_body = [html.Tbody(rows)]

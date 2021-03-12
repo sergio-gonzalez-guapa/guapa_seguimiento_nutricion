@@ -78,6 +78,33 @@ WHERE llave IN (
 )
 '''
 
+info_blocks = '''
+SELECT descripcion as bloque,
+(area*(1-drenajes))/10000 as area_neta,
+poblacion,
+rango_semilla
+FROM blocks_detalle 
+where descripcion in %s
+'''
+
+info_blocks_desarrollo_gs = '''
+SELECT descripcion as bloque,
+desarrollo,
+fecha_siembra,
+finduccion
+FROM blocks_desarrollo 
+where grupo_siembra = %s
+'''
+info_blocks_desarrollo_gf = '''
+SELECT descripcion as bloque,
+desarrollo,
+fecha_siembra,
+finduccion
+FROM blocks_desarrollo 
+where grupo_forza = %s
+'''
+
+
 def query_para_select(etapa):
     consulta=None
     print(etapa)
@@ -124,6 +151,7 @@ def query_para_tabla(grupo, etapa, categoria):
     if consulta.empty:
         print("consulta vacía")
     data_filtrada = consulta.query("categoria==@categoria_query and etapa ==@etapa_query")
+    data_filtrada.to_excel("consulta.xlsx",index=False)
     #data_filtrada.drop(["categoria","etapa"],axis=1,inplace=True)
     if data_filtrada.empty:
         print("consulta con valores pero query vacío")
@@ -140,6 +168,20 @@ def query_para_tabla(grupo, etapa, categoria):
     resultado = data_filtrada.groupby(["bloque"],dropna=False).agg(**agg_dict).reset_index().round(2)
     resultado["indicador"] =resultado.apply(lambda row: 0 if (row ["# aplicaciones con diferencia menor a 8 días"]+row["# aplicaciones con diferencia mayor a 22 días"]>0.7*row["conteo"]) or (row["conteo"]<14) else 1 ,axis=1 )
 
+    df_area = db_connection.query(info_blocks, [tuple(set(resultado.bloque.tolist()))])
+    
+    df_info_blocks = pd.DataFrame(columns=['bloque'])
+
+    if prefijo in ["GS","RC"]:
+        df_info_blocks = db_connection.query(info_blocks_desarrollo_gs, [grupo])
+        df_info_blocks["inducido"] = df_info_blocks.finduccion.apply(lambda x: "No" if x==None else "Si")
+
+    if prefijo == "GF":
+        df_info_blocks = db_connection.query(info_blocks_desarrollo_gf, [grupo])
+        df_info_blocks["edad_forza"]=  ((df_info_blocks.finduccion - df_info_blocks.fecha_siembra)/np.timedelta64(1, 'M')).round(2)
+
+    resultado = resultado.merge(df_area, how="left",on="bloque").merge(df_info_blocks, how="left",on="bloque")
+    
     #Agregar a resultado valores de bloque como: población, área, etc
     tabla = dbc.Table.from_dataframe(resultado).children
     return tabla
@@ -179,6 +221,12 @@ def actualizar_select_bloque(path,url):
     if path =='detalle-grupo':
         return query_para_select(etapa)
 
+    return None
+
+@app.callback(Output("select-grupo", "value"), [Input('url','search')],[State('pathname-intermedio','children')])
+def actualizar_valor_select_lote(search, path):
+    if "detalle-grupo" in path:
+        return  search.split("=")[1]
     return None
 
 @app.callback([Output("detalle-grupo-table", "children"),Output("peso-planta-graph", "figure")],
