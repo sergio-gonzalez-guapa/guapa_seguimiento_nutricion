@@ -13,10 +13,11 @@ from .layouts_predefinidos import elementos
 
 aplicaciones = db_connection.query('''
 SELECT * 
-FROM APLICACIONES 
-WHERE blocknumber in (SELECT BLOCKNUMBER FROM BLOCKS_desarrollo WHERE FINDUCCION is null ) AND
-categoria = 'FERTILIZANTES'
-ORDER BY blocknumber, fecha_aplicacion
+FROM aplicaciones 
+WHERE blocknumber in (SELECT blocknumber FROM blocks_desarrollo WHERE finduccion is null ) AND
+categoria = 'fertilizante'
+AND etapa ='Post Siembra'
+ORDER BY blocknumber, fecha
 ''')
 
 bloques = db_connection.query('''
@@ -29,17 +30,17 @@ WHERE grupo_forza is null and grupo_siembra is not null
 aplicaciones_filtradas = aplicaciones.drop_duplicates(subset="blocknumber",keep='last').copy()
 aplicaciones_filtradas = aplicaciones_filtradas.merge(bloques, how="left",on="blocknumber")
 aplicaciones_filtradas["hoy"] = datetime.today()
-aplicaciones_filtradas["dias_desde_ultima_aplicacion"]=(aplicaciones_filtradas["hoy"]-aplicaciones_filtradas["fecha_aplicacion"]).dt.days
-aplicaciones_filtradas["fecha_aplicacion"]= aplicaciones_filtradas["fecha_aplicacion"].dt.strftime('%d-%B-%Y')
+aplicaciones_filtradas["dias_desde_ultima_aplicacion"]=(aplicaciones_filtradas["hoy"]-aplicaciones_filtradas["fecha"]).dt.days
+aplicaciones_filtradas["fecha"]= aplicaciones_filtradas["fecha"].dt.strftime('%d-%B-%Y')
 aplicaciones_filtradas.drop(["codigo_formula","etapa","motivo","hoy","categoria"],axis=1,inplace=True)
 
-data = aplicaciones_filtradas.groupby(['fecha_aplicacion','descripcion_formula','grupo_siembra','dias_desde_ultima_aplicacion'],dropna=False)['blocknumber'].apply(', '.join).reset_index()
+data = aplicaciones_filtradas.groupby(['fecha','descripcion_formula','grupo_siembra','dias_desde_ultima_aplicacion'],dropna=False)['blocknumber'].apply(', '.join).reset_index()
 
 data.query("dias_desde_ultima_aplicacion<=60",inplace=True)
 data["bloques_pendientes"] = data["grupo_siembra"].str.cat(data["blocknumber"], sep=':')
 data["bloques_pendientes"] = data["bloques_pendientes"].astype(str)
 data.drop(["blocknumber","grupo_siembra"],axis=1,inplace=True)
-data = data.groupby(['fecha_aplicacion','descripcion_formula','dias_desde_ultima_aplicacion'],dropna=False)['bloques_pendientes'].apply('. || '.join).reset_index()
+data = data.groupby(['fecha','descripcion_formula','dias_desde_ultima_aplicacion'],dropna=False)['bloques_pendientes'].apply('. || '.join).reset_index()
 data.sort_values(by="dias_desde_ultima_aplicacion",ascending=False,inplace=True)
 
 

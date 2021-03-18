@@ -2,11 +2,67 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
 import pandas as pd
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
+import db_connection
+from app import app,cache
 
-from app import app
+from .layouts_predefinidos import elementos 
 
+#Inicializo el layout
+layout = elementos.DashLayout()
 
+#Agrego elementos
+layout.crear_elemento(tipo="table",element_id="comparar-grupos-table",  label="Detalle bloques")
+layout.ordenar_elementos(["comparar-grupos-table"])
+
+#Consultas
+calidad_grupos = """select grupo, 
+max(aplicaciones_con_retraso) as max_aplicaciones_tardias,
+max(aplicaciones_muy_proximas) as max_aplicaciones_adelantadas,
+max(aplicaciones_esperadas - num_aplicaciones_realizadas) as max_aplicaciones_pendientes
+
+from calidad_aplicaciones 
+WHERE etapa2 =%s and categoria=%s
+group by(grupo)"""
+
+def query_para_tabla(etapa, categoria):
+    dicc_etapa = {"preforza":"Post Siembra",
+    "postforza":"Post Forza",
+    "semillero":"Post Deshija"}
+
+    dicc_categoria = {"nutricion":"fertilizante",
+    "fungicidas":"fungicida","herbicidas":"herbicida" ,
+    "hormonas":"hormonas"}
+
+    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
+        print("hay un error en etapa o categoria", etapa, categoria)
+        return None
+    
+    categoria_query = dicc_categoria[categoria]
+    
+    consulta = db_connection.query(calidad_grupos, [etapa,categoria_query])
+
+    table_header = [html.Thead(html.Tr([ html.Th(col) for col in consulta.columns]))]
+
+    rows = []
+    for row in consulta.itertuples(index=False):
+        #Aquí debo poner la lógica los anchor para el vínculo que me lleve al grupo correspondiente
+        dict_tuple = row._asdict()
+        new_row=[]
+        for k,v in dict_tuple.items():
+            if v ==None:
+                new_row.append(html.Td(v))
+            elif k =="grupo":
+                new_row.append(html.Td(dcc.Link(v,href=f"/{etapa}-detalle-grupo?grupo={v}#{categoria}") ))
+            else:
+                new_row.append(html.Td(v))
+        
+        rows.append(html.Tr(new_row))
+    
+    table_body = [html.Tbody(rows)]
+    table = dbc.Table(table_header + table_body, bordered=True)
+
+    return table.children
 
 #Elementos filtro
 year_input = dbc.FormGroup(
@@ -102,24 +158,10 @@ boton_aplicar_filtros = dbc.FormGroup(
     row=True,
 )
 
-grupossiembra = ["GS0120","GS0220"]
-mes = [1,1]
-estado_forzamiento = ["Forzado","No forzado"]
-link = ["page-3","www.google.com"]
+##############
+### Datos ###
+###########
 
-df = pd.DataFrame({"gs":grupossiembra, "mes":mes, "estado forza":estado_forzamiento,
-                  "link":link})
-df_drop_link = df.drop(columns='link')
-
-tabla = html.Table(
-        # Header
-        [html.Tr([html.Th(col) for col in df_drop_link.columns])] +
-
-        # Body
-        [html.Tr([
-            html.Td(df.iloc[i][col]) if col != 'gs' else html.Td(html.A(href=df.iloc[i]['link'], children=df.iloc[i][col], target='_blank')) for col in df_drop_link.columns 
-        ]) for i in range(len(df))]
-    ) 
 
 
 form_sliders = dbc.Form([year_input, month_input])
@@ -134,50 +176,13 @@ form_checboxes =dbc.Row(
 
 form_boton = dbc.Form([boton_aplicar_filtros])
 
-#Estructura de tablas
-df_nutricion = pd.DataFrame(
-    {
-        "Grupo de siembra": ["GS2020", "GS2120", "GS2220", "GS2320"],
-        "Indicador de calidad": ["alta", "alta", "baja", "baja"],
-    }
-)
 
-df_proteccion = pd.DataFrame(
-    {
-        "First Name": ["Protección", "Ford", "Zaphod", "Trillian"],
-        "Last Name": ["Dent", "Prefect", "Beeblebrox", "Astra"],
-    }
-)
+@app.callback(Output("comparar-grupos-table", "children"), [Input('pathname-intermedio','children')],[State("url","pathname"),State("url","hash")])
+@cache.memoize()
+def actualizar_select_bloque(path,url,hash):
+    etapa = url.split("-")[0][1:]
+    categoria = hash[1:]
+    if path =='comparar-grupos':
+        return query_para_tabla(etapa,categoria)
 
-df_herbicida = pd.DataFrame(
-    {
-        "First Name": ["Herbicida", "Ford", "Zaphod", "Trillian"],
-        "Last Name": ["Dent", "Prefect", "Beeblebrox", "Astra"],
-    }
-)
-
-def crear_tabla(hash):
-    if hash=="#proteccion":
-        df = df_proteccion
-    elif hash=="#herbicida":
-        df = df_herbicida
-    else:
-        df =df_nutricion
-
-    return [form_sliders,form_checboxes,form_boton,dbc.Table.from_dataframe(df, striped=True, bordered=True, hover=True,size="md")]
-
-def crear_layout (hash="nutricion"):
-
-    
-
-    content = dbc.Card(
-    dbc.CardBody(
-        [
-            form_sliders,
-            html.Div(crear_tabla(hash),id = "comparar-grupos-content")
-        ]
-    ),
-    className="mt-3"
-)
-    return content
-
+    return None

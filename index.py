@@ -90,7 +90,7 @@ app.validation_layout = html.Div([
     # pa.layout,
     cm.layout,
     shared.crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs),
-    cg.crear_layout()
+    cg.layout.salida
     
 ])
 
@@ -138,11 +138,11 @@ def switch_tab(hash, path):
     funcionalidad = "-".join(path.split("-")[1:])
     #Tener en cuenta cambio de hash a vacío!
     if funcionalidad =="detalle-grupo":
-        return dg.layout.salida #volver a poner dg
+        return dg.layout.salida 
     elif funcionalidad =="detalle-bloque":
         return db.layout.salida
     elif funcionalidad=="comparar-grupos":
-        return cg.crear_tabla(hash)
+        return cg.layout.salida
     else:
         return None
 
