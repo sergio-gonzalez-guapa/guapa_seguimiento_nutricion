@@ -59,6 +59,7 @@ calidad_aplicaciones = '''SELECT  bloque,
 etapa,
 categoria,
 grupo,
+finduccion,
 aplicaciones_esperadas - num_aplicaciones_realizadas as "aplicaciones pendientes",
 aplicaciones_con_retraso,
 aplicaciones_muy_proximas

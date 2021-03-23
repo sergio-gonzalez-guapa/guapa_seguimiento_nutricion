@@ -72,7 +72,7 @@ def query_para_tabla(bloque, etapa, categoria):
 def query_para_grafica(tabla_aplicaciones):
     if tabla_aplicaciones.empty:
         return px.scatter()
-    tabla_aplicaciones["calificacion"]= tabla_aplicaciones["dias_diferencia"].apply(lambda x: 1 if x<8 else 2 if x<22 else 3)
+    tabla_aplicaciones["calificacion"]= tabla_aplicaciones["dias_diferencia"].apply(lambda x: 1 if x is None else 1 if x<8 else 2 if x<22 else 3)
     tabla_aplicaciones["color"]= tabla_aplicaciones["calificacion"].apply(lambda x: "debajo del rango" if x==1 else "en rango" if x==2 else "encima del rango")
 
     fig = px.scatter(tabla_aplicaciones, x="fecha", y="calificacion",color="color",

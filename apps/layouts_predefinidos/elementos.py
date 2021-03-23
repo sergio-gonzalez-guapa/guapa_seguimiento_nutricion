@@ -56,15 +56,16 @@ class DashLayout():
     elementos = {}
     salida = html.Div()
 
-    def __init__(self):
+    def __init__(self,extra_elements=[]):
+        self.extra_elements = extra_elements
         #Podría pasar elementos creados por fuera de esta estructura como los filtros !!!
-        pass
 
     def crear_elemento (self, tipo,element_id,  label=None, content=None,encerrado=True):
         nuevo_elemento = ElementoDash(tipo,element_id, label, content)
         if encerrado:
             nuevo_elemento.encerrar_en_tarjeta()
         self.elementos[element_id] = nuevo_elemento
+
 
     def actualizar_elemento(self,element_id,nuevo_contenido,nuevo_label = None):
         elemento_anterior = self.elementos[element_id]
@@ -75,7 +76,10 @@ class DashLayout():
         self.elementos[element_id] = elemento_anterior
         
     def ordenar_elementos (self, orden_elementos):
-        children = []
+        children= []
+        if self.extra_elements:
+            children.extend(self.extra_elements)
+        #Agrega elementos extra primero
         for elemento in orden_elementos:
             if elemento in self.elementos:
                 children.append(self.elementos[elemento].objeto)
