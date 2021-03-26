@@ -29,7 +29,9 @@ class ElementoDash():
             ]
         )
         elif self.tipo=="table":
-            self.elemento_base  = dbc.Table(self.content, bordered=True,id=self.element_id, responsive=True)
+            self.elemento_base  = dbc.Table(self.content, bordered=True,id=self.element_id, responsive=True,style={
+ 'whiteSpace': 'pre-line'
+ })
             self.objeto = [ html.H3(self.label),self.elemento_base]
             
         

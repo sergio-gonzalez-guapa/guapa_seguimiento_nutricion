@@ -87,7 +87,7 @@ app.validation_layout = html.Div([
     eb.layout.salida,
     db.layout.salida,
     dg.layout.salida,
-    # pa.layout,
+    pa.layout.salida,
     cm.layout,
     shared.crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs),
     cg.layout.salida
