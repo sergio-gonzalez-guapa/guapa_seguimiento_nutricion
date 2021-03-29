@@ -11,7 +11,8 @@ from apps import comparar_grupos as cg
 from apps import detalle_grupo as dg
 from apps import detalle_bloque as db
 from apps import programacion_aplicaciones as pa
-from apps import cargue_muestreos as cm
+from apps import alertas_aplicaciones as aa
+#from apps import cargue_muestreos as cm
 
 from db_connection import crear_nueva_conexion
 
@@ -53,7 +54,7 @@ navbar = dbc.NavbarSimple(
             label="Calidad de aplicaciones",
         ),
         dbc.NavItem(dbc.NavLink("Programación de aplicaciones", href="/programacion-aplicaciones")),
-        dbc.NavItem(dbc.NavLink("Cargue de muestreos", href="/cargue-muestreos"))
+        dbc.NavItem(dbc.NavLink("Alerta de aplicaciones", href="alertas-aplicaciones"))
     ],
     brand="Seguimiento de aplicaciones",
     brand_href="/",
@@ -87,8 +88,9 @@ app.validation_layout = html.Div([
     eb.layout.salida,
     db.layout.salida,
     dg.layout.salida,
+    aa.layout.salida,
     pa.layout.salida,
-    cm.layout,
+#    cm.layout,
     shared.crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs),
     cg.layout.salida
     
@@ -104,11 +106,14 @@ def display_page(pathname):
     if pathname == '/estado-bloques':
         return eb.layout.salida, 'estado-bloques'
 
+    if pathname == '/alertas-aplicaciones':
+        return aa.layout.salida, 'alertas-aplicaciones'
+    
     if pathname == '/programacion-aplicaciones':
         return pa.layout.salida, 'programacion-aplicaciones'
 
-    if pathname == '/cargue-muestreos':
-        return cm.layout, 'cargue_muestreos'
+    # if pathname == '/cargue-muestreos':
+    #     return cm.layout, 'cargue_muestreos'
     
     agrupacion = pathname.split("-")[0][1:] 
     comando = agrupacion if agrupacion in ["preforza","postforza","semillero"] else "selección inválida"
