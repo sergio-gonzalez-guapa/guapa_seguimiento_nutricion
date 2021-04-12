@@ -115,14 +115,13 @@ def display_page(pathname):
     # if pathname == '/cargue-muestreos':
     #     return cm.layout, 'cargue_muestreos'
     comando = "selección inválida"
-
+    funcionalidad="selección inválida"
     if pathname is not None:
         agrupacion = pathname.split("-")[0][1:] 
         comando = agrupacion if agrupacion in ["preforza","postforza","semillero"] else "selección inválida"
-
+        funcionalidad = "-".join(pathname.split("-")[1:])
     #Comparar grupos
-    funcionalidad = "-".join(pathname.split("-")[1:])
-
+    
     if comando!="selección inválida":
 
         funciones_validas= ['comparar-grupos','detalle-grupo',"detalle-bloque"]
