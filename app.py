@@ -13,7 +13,7 @@ cache = Cache(app.server,config={
 
     "CACHE_TYPE": "SimpleCache",
     "CACHE_DEFAULT_TIMEOUT": 1000,
-    "CACHE_IGNORE_ERRORS":True,
+    "CACHE_IGNORE_ERRORS":False,
     "CACHE_THRESHOLD":30
 
 })

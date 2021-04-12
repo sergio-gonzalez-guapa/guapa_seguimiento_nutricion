@@ -54,7 +54,6 @@ def query_para_tabla(bloque, etapa, categoria):
     "fungicidas":"fungicida","herbicidas":"herbicida" ,
     "hormonas":"hormonas"}
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or bloque==None:
-        print("hay un error en el bloque",bloque, etapa, categoria)
         return None, pd.DataFrame()
     
     etapa_query = dicc_etapa[etapa][bloque[0:2]]

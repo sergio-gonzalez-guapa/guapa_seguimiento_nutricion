@@ -30,6 +30,9 @@ ORDER BY blocknumber, fecha)
 SELECT bloque,grupo,fecha,descripcion_formula, DATE_PART('day',now()-fecha)::integer as dias_desde_ultima_aplicacion FROM aplicaciones_ordenadas 
 WHERE rn = 1
 '''
+@cache.memoize()
+def generar_alertas_bloques_actuales ():
+    return db_connection.query(consulta_aplicaciones)
 
 consulta_bloques_nuevos = """SELECT bloque,
 fecha_siembra,
@@ -39,20 +42,21 @@ WHERE finduccion is null
 AND bloque NOT IN (select distinct bloque 
 FROM aplicaciones)
 """
-
+@cache.memoize()
+def generar_alertas_bloques_nuevos ():
+    return db_connection.query(consulta_bloques_nuevos)
 
 layout = elementos.DashLayout()
 
 layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición preforza")
-layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques sin aplicación")
+layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
 layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
 
 @app.callback(Output("aplicaciones-pendientes-table", "children"), [Input('pathname-intermedio','children')])
-@cache.memoize()
+
 def actualizar_select_bloque(path):
     if path =='alertas-aplicaciones':
-        aplicaciones = db_connection.query(consulta_aplicaciones)
-        
+        aplicaciones = generar_alertas_bloques_actuales()
         aplicaciones["fecha"]= pd.to_datetime(aplicaciones["fecha"]).dt.strftime('%d-%B-%Y')
         data = aplicaciones.groupby(['fecha','descripcion_formula','grupo','dias_desde_ultima_aplicacion'],dropna=False)['bloque'].apply(', '.join).reset_index()
         data.query("dias_desde_ultima_aplicacion<=60",inplace=True)
@@ -66,14 +70,13 @@ def actualizar_select_bloque(path):
     return None
 
 @app.callback(Output("bloques-nuevos-table", "children"), [Input('pathname-intermedio','children')])
-@cache.memoize()
 def actualizar_select_bloque(path):
     if path =='alertas-aplicaciones':
-        aplicaciones = db_connection.query(consulta_bloques_nuevos)
-        aplicaciones["fecha_siembra"]= pd.to_datetime(aplicaciones["fecha_siembra"]).dt.strftime('%d-%B-%Y')
-        data = aplicaciones.groupby(['fecha_siembra','dias_sin_aplicacion'],dropna=False)['bloque'].apply(', '.join).reset_index()
-        data.sort_values(by="dias_sin_aplicacion",ascending=False,inplace=True)
-        return dbc.Table.from_dataframe(data).children
+        aplicaciones2 = generar_alertas_bloques_nuevos()
+        aplicaciones2["fecha_siembra"]= pd.to_datetime(aplicaciones2["fecha_siembra"]).dt.strftime('%d-%B-%Y')
+        data2 = aplicaciones2.groupby(['fecha_siembra','dias_sin_aplicacion'],dropna=False)['bloque'].apply(', '.join).reset_index()
+        data2.sort_values(by="dias_sin_aplicacion",ascending=False,inplace=True)
+        return dbc.Table.from_dataframe(data2).children
 
     return None
 

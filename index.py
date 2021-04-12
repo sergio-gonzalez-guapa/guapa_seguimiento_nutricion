@@ -99,7 +99,6 @@ app.validation_layout = html.Div([
 @app.callback([Output('main-content', 'children'),Output('pathname-intermedio','children')],
               [Input('url', 'pathname')])
 def display_page(pathname):
-
     if pathname == '/':
         return 'Home', 'Home'     
 
@@ -116,6 +115,8 @@ def display_page(pathname):
     #     return cm.layout, 'cargue_muestreos'
     comando = "selección inválida"
     funcionalidad="selección inválida"
+    pathname.split("-")[0][1:] 
+    
     if pathname is not None:
         agrupacion = pathname.split("-")[0][1:] 
         comando = agrupacion if agrupacion in ["preforza","postforza","semillero"] else "selección inválida"
