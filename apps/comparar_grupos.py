@@ -160,7 +160,10 @@ form_checboxes =dbc.Row(
 
 form_boton = dbc.Form([boton_aplicar_filtros])
 #Inicializo el layout
-layout = elementos.DashLayout(extra_elements=[form_sliders,form_checboxes,form_boton])
+layout = elementos.DashLayout(extra_elements=[form_sliders,form_checboxes,html.H5("", id="h3-dias-objetivo"),
+html.H5("", id="h3-rango-inferior"),
+html.H5("", id="h3-rango-superior"),
+ form_boton])
 
 
 #Agrego elementos
@@ -271,23 +274,32 @@ def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelanta
     return table.children
 
 
-
-
-@app.callback(Output("comparar-grupos-table", "children"), 
+@app.callback([Output("comparar-grupos-table", "children"),Output("h3-dias-objetivo", "children"),
+Output("h3-rango-inferior", "children"),Output("h3-rango-superior", "children")],
 [Input('pathname-intermedio','children'),
 Input("filtrar-grupos-btn", "n_clicks")],[State("url","pathname"),
 State("url","hash"), State('comparar-grupos-year-slider',"value"),
 State('comparar-grupos-month-slider',"value"),State('estado-forza-grupos-checklist','value'),
 State('comparar-grupos-tardias-slider',"value"),State('comparar-grupos-adelantadas-slider',"value"),
 State('comparar-grupos-pendientes-slider',"value")])
-
-
-
-
 @cache.memoize()
 def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,adelantadas,pendientes):
-    etapa = url.split("-")[0][1:]
-    categoria = hash[1:]
     if path =='comparar-grupos':
-        return query_para_tabla(etapa,categoria,years,months,estado_forza,tardias,adelantadas,pendientes)
-    return None
+        dicc_homologacion = {"preforza":"Post Siembra",
+        "postforza":"Post Forza",
+        "semillero":"Post Poda",
+        "nutricion":"fertilizante",
+        "herbicidas":"herbicida",
+        "fungicidas":"fungicida",
+        "insecticidas":"insecticida"}
+
+        
+        etapa = url.split("-")[0][1:]
+        categoria = hash[1:]
+        nueva_consulta = db_connection.query("""SELECT dias_entre_aplicaciones, tolerancia_rango_inferior, tolerancia_rango_superior FROM rangos_calidad_aplicaciones
+    WHERE etapa=%s and categoria = %s""",[dicc_homologacion[etapa],dicc_homologacion[categoria] ])
+
+        
+        
+        return query_para_tabla(etapa,categoria,years,months,estado_forza,tardias,adelantadas,pendientes), f"* días entre aplicaciones: {nueva_consulta.iat[0,0]}", f"* límite inferior de tolerancia : {nueva_consulta.iat[0,1]}", f"* límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
+    return None, "","",""

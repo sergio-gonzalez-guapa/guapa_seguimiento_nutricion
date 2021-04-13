@@ -60,7 +60,8 @@ def query_para_tabla(bloque, etapa, categoria):
     categoria_query = dicc_categoria[categoria]
     
     consulta= db_connection.query(aplicaciones_bloque, [bloque,etapa_query,categoria_query])
-    consulta["fecha_str"]=consulta["fecha"].dt.strftime('%d-%B-%Y')
+    if consulta.empty==False:
+        consulta["fecha_str"]=consulta["fecha"].dt.strftime('%d-%B-%Y')
     
     tabla = dbc.Table.from_dataframe(consulta.drop(["fecha"],axis=1)).children
     return tabla, consulta
