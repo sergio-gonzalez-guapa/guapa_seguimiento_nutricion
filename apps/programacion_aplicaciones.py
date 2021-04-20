@@ -3,11 +3,14 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 import pandas as pd
 from dash.dependencies import Input, Output, State
+from dash_extensions import Download
+from dash_extensions.snippets import send_bytes
+from dash.exceptions import PreventUpdate
 
 import datetime
 from dateutil.relativedelta import relativedelta
 import db_connection
-from app import app,cache
+from app import app,cache, dbc_table_to_pandas
 
 from .layouts_predefinidos import elementos 
 
@@ -37,9 +40,15 @@ week_input = dbc.FormGroup(
     ]
 )
 
+exportar_a_excel_input = dbc.FormGroup(
+    [
+        dbc.Button("Exportar a Excel",id="exportar-programacion-excel-btn", color="success", className="mr-1"),
+        Download(id="download-programacion")
+    ]
+)
 
 
-form_programacion = dbc.Form([year_input, week_input])
+form_programacion = dbc.Form([year_input, week_input,exportar_a_excel_input])
 
 #Inicializo el layout
 layout = elementos.DashLayout(extra_elements=[form_programacion])
@@ -93,3 +102,30 @@ Input("input-week-programacion-aplicaciones", "value")])
 @cache.memoize()
 def actualizar_select_bloque(year,week):
     return query_para_tabla(year,week)
+
+@app.callback(
+Output("download-programacion", "data"),
+[Input("exportar-programacion-excel-btn", "n_clicks")],
+[State("programacion-aplicaciones-table", "children")])
+def download_as_csv(n_clicks, table_data):
+    if (not n_clicks) or (table_data is None):
+      raise PreventUpdate
+    
+    # import pickle
+
+
+    # with open('tablita.pickle', 'wb') as handle:
+    #     pickle.dump(table_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    df = dbc_table_to_pandas(table_data)
+    # download_buffer = io.StringIO()
+    # df.to_csv(download_buffer, index=False)
+    # download_buffer.seek(0)
+    # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
+
+    def to_xlsx(bytes_io):
+        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
+        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
+        xslx_writer.save()
+
+    return send_bytes(to_xlsx, "programacion_aplicaciones.xlsx")

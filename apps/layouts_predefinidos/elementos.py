@@ -37,7 +37,7 @@ class ElementoDash():
         
         elif self.tipo=="graph":
             self.elemento_base = dcc.Graph(config={
-        'displayModeBar': False},id=self.element_id )
+        'displayModeBar': True},id=self.element_id )
             self.objeto = [html.H3(self.label),self.elemento_base]
         else:
             raise Exception(f"el tipo de elemento {tipo} no está definido")

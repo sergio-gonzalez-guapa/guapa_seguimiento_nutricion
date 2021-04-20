@@ -3,12 +3,18 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 import pandas as pd
 from dash.dependencies import Input, Output, State
+from dash_extensions import Download
+from dash_extensions.snippets import send_bytes
+from dash.exceptions import PreventUpdate
+
+
 import db_connection
 import plotly.express as px
 from datetime import datetime
 import numpy as np
-from app import app,cache
+from app import app,cache, dbc_table_to_pandas
 from .layouts_predefinidos import elementos 
+
 
 
 consulta_aplicaciones = '''
@@ -46,24 +52,33 @@ FROM aplicaciones)
 def generar_alertas_bloques_nuevos ():
     return db_connection.query(consulta_bloques_nuevos)
 
-layout = elementos.DashLayout()
+
+exportar_a_excel_input = dbc.FormGroup(
+    [
+        dbc.Button("Exportar a Excel",id="exportar-alertas-excel-btn", color="success", className="mr-1"),
+        Download(id="download-alertas")
+    ]
+)
+form_programacion = dbc.Form([exportar_a_excel_input])
+
+layout = elementos.DashLayout(extra_elements=[form_programacion])
 
 layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición preforza")
 layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
 layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
 
 @app.callback(Output("aplicaciones-pendientes-table", "children"), [Input('pathname-intermedio','children')])
-
 def actualizar_select_bloque(path):
     if path =='alertas-aplicaciones':
         aplicaciones = generar_alertas_bloques_actuales()
         aplicaciones["fecha"]= pd.to_datetime(aplicaciones["fecha"]).dt.strftime('%d-%B-%Y')
-        data = aplicaciones.groupby(['fecha','descripcion_formula','grupo','dias_desde_ultima_aplicacion'],dropna=False)['bloque'].apply(', '.join).reset_index()
+        aplicaciones["lote"] = aplicaciones["bloque"].str.slice(start=2, stop=4)
+        data = aplicaciones.groupby(['fecha','descripcion_formula',"lote", 'grupo','dias_desde_ultima_aplicacion'],dropna=False)['bloque'].apply(', '.join).reset_index()
         data.query("dias_desde_ultima_aplicacion<=60",inplace=True)
         data["bloques_pendientes"] = data["grupo"].str.cat(data["bloque"], sep=':')
         data["bloques_pendientes"] = data["bloques_pendientes"].astype(str)
         data.drop(["bloque","grupo"],axis=1,inplace=True)
-        data = data.groupby(['fecha','descripcion_formula','dias_desde_ultima_aplicacion'],dropna=False)['bloques_pendientes'].apply('\n---------------------\n'.join).reset_index()
+        data = data.groupby(['fecha','descripcion_formula',"lote",'dias_desde_ultima_aplicacion'],dropna=False)['bloques_pendientes'].apply('\n---------------------\n'.join).reset_index()
         data.sort_values(by="dias_desde_ultima_aplicacion",ascending=False,inplace=True)
         return dbc.Table.from_dataframe(data).children
 
@@ -80,3 +95,33 @@ def actualizar_select_bloque(path):
 
     return None
 
+
+@app.callback(
+Output("download-alertas", "data"),
+[Input("exportar-alertas-excel-btn", "n_clicks")],
+[State("aplicaciones-pendientes-table", "children"),
+State("bloques-nuevos-table", "children")])
+def download_as_csv(n_clicks, table_data, table_data2):
+    if (not n_clicks) or (table_data is None):
+      raise PreventUpdate
+    
+    # import pickle
+
+
+    # with open('tablita.pickle', 'wb') as handle:
+    #     pickle.dump(table_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    df = dbc_table_to_pandas(table_data)
+    df2=dbc_table_to_pandas(table_data2)
+    # download_buffer = io.StringIO()
+    # df.to_csv(download_buffer, index=False)
+    # download_buffer.seek(0)
+    # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
+
+    def to_xlsx(bytes_io):
+        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
+        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
+        df2.to_excel(xslx_writer, index=False, sheet_name="sheet2")
+        xslx_writer.save()
+
+    return send_bytes(to_xlsx, "alertas_aplicaciones.xlsx")

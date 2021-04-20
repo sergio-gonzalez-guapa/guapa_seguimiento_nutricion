@@ -8,7 +8,7 @@ import datetime
 from dateutil.relativedelta import relativedelta
 import io
 import db_connection
-from app import app,cache
+from app import app,cache, dbc_table_to_pandas
 
 from dash_extensions import Download
 from dash_extensions.snippets import send_bytes
@@ -145,8 +145,9 @@ boton_aplicar_filtros = dbc.FormGroup(
             dbc.Button("Aplicar filtros",id="filtrar-grupos-btn", color="primary", className="mr-1"),
             width=10,
         ),
+        html.Br(),
         dbc.Col(
-            dbc.Button("Exportar a Excel",id="exportar-excel-btn", color="primary", className="mr-1"),
+            dbc.Button("Exportar a Excel",id="exportar-excel-btn", color="success", className="mr-1"),
             width=10,
         ),
         Download(id="download")
@@ -313,35 +314,6 @@ def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,a
         return query_para_tabla(etapa,categoria,years,months,estado_forza,tardias,adelantadas,pendientes), f"* días entre aplicaciones: {nueva_consulta.iat[0,0]}", f"* límite inferior de tolerancia : {nueva_consulta.iat[0,1]}", f"* límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
     return None, "","",""
 
-# Exportar a excel
-def explorar_celda (celda):
-    #Se debe llamar esta función cuando se recorra un th o un td
-    if isinstance(celda,str) or isinstance(celda,int):
-        return celda
-    else:
-        return explorar_celda(celda["props"]["children"])
-
-def explorar_fila(fila):
-    labels = []
-    for celda in fila:
-        labels.append(explorar_celda(celda))
-    return labels
-
-def dbc_table_to_pandas (tabla):
-    dicc_resultado = {}
-    for elemento in tabla:
-        if elemento["type"] =="Thead":
-            dicc_resultado["columnas"] = explorar_fila(elemento["props"]["children"]["props"]["children"])
-        if elemento["type"] =="Tbody":
-            lista_filas = elemento["props"]["children"]
-            datos = []
-            for fila in lista_filas:
-                datos.append(explorar_fila(fila["props"]["children"]))
-            dicc_resultado["labels"] = datos
-    
-    return pd.DataFrame(dicc_resultado["labels"], columns = dicc_resultado["columnas"]) 
-
-
 @app.callback(
 Output("download", "data"),
 [Input("exportar-excel-btn", "n_clicks")],
@@ -361,4 +333,4 @@ def download_as_csv(n_clicks, table_data):
         df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
         xslx_writer.save()
 
-    return send_bytes(to_xlsx, "some_name.xlsx")
+    return send_bytes(to_xlsx, "comparacion_grupos.xlsx")
