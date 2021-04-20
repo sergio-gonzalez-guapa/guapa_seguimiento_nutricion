@@ -3,7 +3,7 @@ import dash_bootstrap_components as dbc
 import dash_html_components as html
 import sys
 from dash.dependencies import Input, Output, State
-
+from dash.exceptions import PreventUpdate
 from app import app
 from apps import estado_bloques as eb
 from apps import calidad_aplicaciones_compartido as shared
@@ -115,6 +115,8 @@ def display_page(pathname):
     #     return cm.layout, 'cargue_muestreos'
     comando = "selección inválida"
     funcionalidad="selección inválida"
+    if pathname is None:
+        raise PreventUpdate
     pathname.split("-")[0][1:] 
     
     if pathname is not None:
