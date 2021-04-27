@@ -9,11 +9,21 @@ from dateutil.relativedelta import relativedelta
 import io
 import db_connection
 from app import app,cache, dbc_table_to_pandas
+import plotly.express as px
 
 from dash_extensions import Download
 from dash_extensions.snippets import send_bytes
 
 from .layouts_predefinidos import elementos 
+
+dicc_etapa = {"preforza":"Post Siembra",
+"postforza":"Post Forza",
+"semillero":"Post Deshija"}
+
+dicc_categoria = {"nutricion":"fertilizante",
+"fungicidas":"fungicida","herbicidas":"herbicida" ,
+"hormonas":"hormonas"}
+
 
 #Elementos filtro
 year_input = dbc.FormGroup(
@@ -177,11 +187,15 @@ html.H5("", id="h3-rango-superior"),
 
 
 #Agrego elementos
+layout.crear_elemento(tipo="graph",element_id="calidad-aplicaciones-mensual-graph",  label="Cumplimiento de aplicaciones")
 layout.crear_elemento(tipo="table",element_id="comparar-grupos-table",  label="Detalle bloques")
 
-layout.ordenar_elementos(["comparar-grupos-table"])
+layout.ordenar_elementos(["calidad-aplicaciones-mensual-graph","comparar-grupos-table"])
 
-#Consultas
+###############
+### Consultas
+##############
+
 calidad_grupos = """select grupo, 
 min(fecha_siembra) as fecha_siembra,
 SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) as numero_bloques,
@@ -195,14 +209,38 @@ WHERE etapa2 =%s and categoria=%s
 group by(grupo)
 order by 2"""
 
-def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelantadas,pendientes):
-    dicc_etapa = {"preforza":"Post Siembra",
-    "postforza":"Post Forza",
-    "semillero":"Post Deshija"}
+calidad_aplicaciones_mensual = """ 
+    SELECT mes,
+            clasificacion,
+            total
+        FROM  calidad_aplicaciones_mensual
+        WHERE etapa = %s and categoria = %s
+        """
 
-    dicc_categoria = {"nutricion":"fertilizante",
-    "fungicidas":"fungicida","herbicidas":"herbicida" ,
-    "hormonas":"hormonas"}
+@cache.memoize()
+def query_para_grafica(etapa, categoria):
+
+    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
+        print("hay un error en etapa o categoria", etapa, categoria)
+        return px.scatter()
+
+    categoria_query = dicc_categoria[categoria]
+    consulta = db_connection.query(calidad_aplicaciones_mensual, [dicc_etapa[etapa],categoria_query])
+    
+    
+
+
+    if consulta.empty:
+        print("consulta vacía")
+        return px.scatter()
+
+
+    fig = px.histogram(consulta, x="mes", y="total",color="clasificacion", histfunc='sum')
+
+    return fig
+
+
+def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelantadas,pendientes):
 
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
         print("hay un error en etapa o categoria", etapa, categoria)
@@ -283,9 +321,14 @@ def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelanta
 
     return table.children
 
+############
+###Callbacks
+###########
+
 
 @app.callback([Output("comparar-grupos-table", "children"),Output("h3-dias-objetivo", "children"),
-Output("h3-rango-inferior", "children"),Output("h3-rango-superior", "children")],
+Output("h3-rango-inferior", "children"),Output("h3-rango-superior", "children"),
+Output("calidad-aplicaciones-mensual-graph", "figure")],
 [Input('pathname-intermedio','children'),
 Input("filtrar-grupos-btn", "n_clicks")],[State("url","pathname"),
 State("url","hash"), State('comparar-grupos-year-slider',"value"),
@@ -294,7 +337,10 @@ State('comparar-grupos-tardias-slider',"value"),State('comparar-grupos-adelantad
 State('comparar-grupos-pendientes-slider',"value")])
 @cache.memoize()
 def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,adelantadas,pendientes):
+
     if path =='comparar-grupos':
+
+
         dicc_homologacion = {"preforza":"Post Siembra",
         "postforza":"Post Forza",
         "semillero":"Post Poda",
@@ -306,13 +352,19 @@ def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,a
         
         etapa = url.split("-")[0][1:]
         categoria = hash[1:]
+        #Gráfica
+        histograma = query_para_grafica(etapa,categoria)
+        #Tabla
         nueva_consulta = db_connection.query("""SELECT dias_entre_aplicaciones, tolerancia_rango_inferior, tolerancia_rango_superior FROM rangos_calidad_aplicaciones
     WHERE etapa=%s and categoria = %s""",[dicc_homologacion[etapa],dicc_homologacion[categoria] ])
 
+        contenido = query_para_tabla(etapa,categoria,years,months,estado_forza,tardias,adelantadas,pendientes)
+        dias_objetivo = f"* días entre aplicaciones: {nueva_consulta.iat[0,0]}"
+        limite_inferior = f"* límite inferior de tolerancia : {nueva_consulta.iat[0,1]}"
+        limite_superior = f"* límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
         
-        
-        return query_para_tabla(etapa,categoria,years,months,estado_forza,tardias,adelantadas,pendientes), f"* días entre aplicaciones: {nueva_consulta.iat[0,0]}", f"* límite inferior de tolerancia : {nueva_consulta.iat[0,1]}", f"* límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
-    return None, "","",""
+        return contenido,dias_objetivo ,limite_inferior , limite_superior,histograma
+    return None, "","","", px.scatter()
 
 @app.callback(
 Output("download", "data"),

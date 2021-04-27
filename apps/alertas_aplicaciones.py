@@ -16,29 +16,115 @@ from app import app,cache, dbc_table_to_pandas
 from .layouts_predefinidos import elementos 
 
 
-
-consulta_aplicaciones = '''
+consulta_aplicaciones_preforza = '''
 WITH aplicaciones_ordenadas AS (
-SELECT bloque, etapa,grupo,fecha::date,
-codigo_formula,
-descripcion_formula,
-categoria,
-row_number() over (partition by bloque
-                                 order by fecha desc) as rn
-FROM aplicaciones 
-WHERE blocknumber in (SELECT blocknumber FROM blocks_desarrollo WHERE finduccion is null ) AND
-categoria = 'fertilizante'
-AND etapa in ('Post Siembra','Post Deshija')
-AND grupo is not NULL
-AND bloque is not NULL
-ORDER BY blocknumber, fecha)
+    SELECT bloque, etapa,grupo,fecha::date,
+    codigo_formula,
+    descripcion_formula,
+    categoria,
+    row_number() over (partition by bloque
+                                    order by fecha desc) as rn
+    FROM aplicaciones 
+    /* Esta es la clave para controlar por estado del cultivo */
+    WHERE bloque in (SELECT bloque FROM blocks_desarrollo WHERE finduccion is null ) AND
+    categoria = 'fertilizante'
+    AND etapa in %s
+    AND grupo is not NULL
+    AND bloque is not NULL
+    ORDER BY blocknumber, fecha)
 
-SELECT bloque,grupo,fecha,descripcion_formula, DATE_PART('day',now()-fecha)::integer as dias_desde_ultima_aplicacion FROM aplicaciones_ordenadas 
+SELECT bloque,
+        grupo,
+        fecha,
+        descripcion_formula,
+        DATE_PART('day',now()-fecha)::integer as dias_desde_ultima_aplicacion
+FROM aplicaciones_ordenadas 
+
 WHERE rn = 1
 '''
+
+consulta_aplicaciones_posforza = '''
+WITH aplicaciones_ordenadas AS (
+    SELECT bloque, etapa,grupo,fecha::date,
+    codigo_formula,
+    descripcion_formula,
+    categoria,
+    row_number() over (partition by bloque
+                                    order by fecha desc) as rn
+    FROM aplicaciones 
+    /* Esta es la clave para controlar por estado del cultivo */
+    WHERE bloque not in (SELECT bloque FROM cosecha_resumen) AND
+    categoria = 'fertilizante'
+    AND etapa in %s
+    AND grupo is not NULL
+    AND bloque is not NULL
+    ORDER BY blocknumber, fecha)
+
+SELECT bloque,
+        grupo,
+        fecha,
+        descripcion_formula,
+        DATE_PART('day',now()-fecha)::integer as dias_desde_ultima_aplicacion
+FROM aplicaciones_ordenadas 
+
+WHERE rn = 1
+'''
+
+consulta_aplicaciones_semillero= '''
+WITH aplicaciones_ordenadas AS (
+    SELECT bloque, etapa,grupo,fecha::date,
+    codigo_formula,
+    descripcion_formula,
+    categoria,
+    row_number() over (partition by bloque
+                                    order by fecha desc) as rn
+    FROM aplicaciones 
+    /* Esta es la clave para controlar por estado del cultivo */
+    WHERE blocknumber in (SELECT blocknumber FROM siembra WHERE estado in ('3','7')) AND
+    categoria = 'fertilizante'
+    AND etapa in %s
+    AND grupo is not NULL
+    AND bloque is not NULL
+    ORDER BY blocknumber, fecha)
+
+SELECT bloque,
+        grupo,
+        fecha,
+        descripcion_formula,
+        DATE_PART('day',now()-fecha)::integer as dias_desde_ultima_aplicacion
+FROM aplicaciones_ordenadas 
+
+WHERE rn = 1
+'''
+
+#Layout
+
+nombres_tabs_nutricion = ["preforza","semillero","postforza"]
+
+def crear_tabs (lista_nombres,id_objeto):
+    lista_tabs = []
+
+    for index,value in enumerate(lista_nombres):
+        tab_nueva = dbc.Tab(label=value, tab_id="tab-"+str(index))
+        lista_tabs.append(tab_nueva)
+
+
+    return dbc.Tabs(
+            lista_tabs,
+            id=id_objeto,
+            active_tab="tab-0",
+        )
+
+tabs_alertas_nutricion = crear_tabs(nombres_tabs_nutricion,"tabs-alertas-nutricion")
+
 @cache.memoize()
-def generar_alertas_bloques_actuales ():
-    return db_connection.query(consulta_aplicaciones)
+def generar_alertas_bloques_actuales (etapa):
+    if "Post Siembra" in etapa:
+        return db_connection.query(consulta_aplicaciones_preforza,[etapa])
+    elif "Post Forza" in etapa:
+        return db_connection.query(consulta_aplicaciones_posforza,[etapa])
+    else: 
+        return db_connection.query(consulta_aplicaciones_semillero,[etapa])
 
 consulta_bloques_nuevos = """SELECT bloque,
 fecha_siembra,
@@ -61,24 +147,50 @@ exportar_a_excel_input = dbc.FormGroup(
 )
 form_programacion = dbc.Form([exportar_a_excel_input])
 
-layout = elementos.DashLayout(extra_elements=[form_programacion])
+layout = elementos.DashLayout(extra_elements=[form_programacion,tabs_alertas_nutricion])
 
-layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición preforza")
+layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición")
 layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
 layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
 
-@app.callback(Output("aplicaciones-pendientes-table", "children"), [Input('pathname-intermedio','children')])
-def actualizar_select_bloque(path):
+
+###################
+##### Callbacks ###
+###################
+
+#Actualizar alertas
+@app.callback(Output("aplicaciones-pendientes-table", "children"), [Input('pathname-intermedio','children'),Input("tabs-alertas-nutricion", "active_tab")])
+def actualizar_select_bloque(path, at):
     if path =='alertas-aplicaciones':
-        aplicaciones = generar_alertas_bloques_actuales()
+        etapa =  ['Post Siembra','Post Deshija']
+        if at =="tab-1":
+            etapa = ["Post Poda"]
+        if at =="tab-2":
+            etapa = ["Post Forza",	"Post Forza"]
+
+        etapa = tuple(set(etapa))
+
+        aplicaciones = generar_alertas_bloques_actuales(etapa)
+        
         aplicaciones["fecha"]= pd.to_datetime(aplicaciones["fecha"]).dt.strftime('%d-%B-%Y')
-        aplicaciones["lote"] = aplicaciones["bloque"].str.slice(start=2, stop=4)
-        data = aplicaciones.groupby(['fecha','descripcion_formula',"lote", 'grupo','dias_desde_ultima_aplicacion'],dropna=False)['bloque'].apply(', '.join).reset_index()
-        data.query("dias_desde_ultima_aplicacion<=60",inplace=True)
+        #Agrega por lote si está en preforza
+        variables_agrupadoras = ['fecha','descripcion_formula',"lote", 'grupo','dias_desde_ultima_aplicacion']
+        if at in ("tab-0","tab-1"):
+            aplicaciones["lote"] = aplicaciones["bloque"].str.slice(start=2, stop=4)
+        
+        else:
+            variables_agrupadoras.remove("lote")
+
+        data = aplicaciones.groupby(variables_agrupadoras,dropna=False)['bloque'].apply(', '.join).reset_index()
+        
+        data.query("dias_desde_ultima_aplicacion<=100",inplace=True)
+
         data["bloques_pendientes"] = data["grupo"].str.cat(data["bloque"], sep=':')
         data["bloques_pendientes"] = data["bloques_pendientes"].astype(str)
         data.drop(["bloque","grupo"],axis=1,inplace=True)
-        data = data.groupby(['fecha','descripcion_formula',"lote",'dias_desde_ultima_aplicacion'],dropna=False)['bloques_pendientes'].apply('\n---------------------\n'.join).reset_index()
+
+        variables_agrupadoras.remove("grupo")
+        data = data.groupby(variables_agrupadoras,dropna=False)['bloques_pendientes'].apply('\n---------------------\n'.join).reset_index()
         data.sort_values(by="dias_desde_ultima_aplicacion",ascending=False,inplace=True)
         return dbc.Table.from_dataframe(data).children
 
