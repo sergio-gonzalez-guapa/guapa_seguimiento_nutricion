@@ -94,6 +94,13 @@ ORDER BY fecha,formula
 def query_para_tabla(year, week):
     consulta = db_connection.query(programacion_ppc, [year,week])
     consulta["fecha"]= pd.to_datetime(consulta["fecha"]).dt.strftime('%d-%B-%Y')
+    consulta.dropna(subset=["grupo"],inplace=True)
+    #Pegar grupos con bloques
+    consulta["bloques_programados"] = consulta["grupo"].str.cat(consulta["bloques"], sep=':')
+    consulta = consulta.groupby(["fecha","formula"],dropna=False)['bloques_programados'].apply('\n---------------------\n'.join).reset_index()
+    #consulta.sort_values(by="fecha",inplace=True)
+
+
     return dbc.Table.from_dataframe(consulta).children
 
 @app.callback(Output("programacion-aplicaciones-table", "children"), 
