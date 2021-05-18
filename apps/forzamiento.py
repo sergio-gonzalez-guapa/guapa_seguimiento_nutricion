@@ -56,7 +56,7 @@ t1.grupo_siembra as "grupo siembra",
 FROM cruce as t1
 LEFT JOIN blocks_detalle as t2
 on t1.blocknumber = t2.blocknumber
-WHERE rn=1 AND ((edad_actual >8 AND desarrollo='PC') OR (edad_actual >3 AND desarrollo='SC'))
+WHERE rn=1 AND ((edad_actual >10 AND desarrollo='PC') OR (peso_planta >2500 AND desarrollo='PC') OR (edad_actual >3 AND desarrollo='SC'))
 ORDER BY edad_actual desc
 """ 
 
