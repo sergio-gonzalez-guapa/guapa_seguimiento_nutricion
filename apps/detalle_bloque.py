@@ -95,7 +95,7 @@ def query_para_grafica_peso_planta(bloque,categoria):
     if consulta.empty:
         return px.scatter()
 
-    fig =px.box(consulta,x="fecha" ,y="valor")
+    fig =px.violin(consulta,x="fecha" ,y="valor",box=True, points='all')
     return fig
 
 

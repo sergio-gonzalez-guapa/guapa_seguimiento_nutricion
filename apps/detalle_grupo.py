@@ -188,7 +188,9 @@ def query_para_grafica(grupo,categoria,etapa):
     return fig
 
 
-
+#####################
+# Callbacks #########
+#####################
 
 @app.callback(Output("select-grupo", "options"), [Input('pathname-intermedio','children')],[State("url","pathname")])
 @cache.memoize()
