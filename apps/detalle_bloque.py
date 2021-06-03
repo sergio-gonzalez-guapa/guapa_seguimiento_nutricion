@@ -1,6 +1,8 @@
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
+from dash.exceptions import PreventUpdate
+
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 import plotly.graph_objs as go
@@ -50,9 +52,9 @@ def query_para_tabla(bloque, etapa, categoria):
     "postforza":{"PC":"Post Forza","SC":"Post 2da Forza"},
     "semillero":{"PC":"Post Deshija","SC":"Post Poda"}}
      
-    dicc_categoria = {"nutricion":"fertilizante",
-    "fungicidas":"fungicida","herbicidas":"herbicida" ,
-    "hormonas":"hormonas"}
+    dicc_categoria = {"nutricion":"nutricion",
+    "fungicidas":"proteccion","herbicidas":"herbicida" ,
+    "induccion":"induccion","induccion":"induccion","protectorsolar":"protectorsolar"}
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or bloque==None:
         return None, pd.DataFrame()
     
@@ -126,6 +128,9 @@ Output("aplicaciones-bloque-graph", "figure")],
  [State("url","pathname"),State("url","hash")])
 @cache.memoize()
 def actualizar_tabla(bloque, path, hash):
+    if bloque is None:
+      raise PreventUpdate
+
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]
     tabla, data = query_para_tabla(bloque,etapa,categoria)

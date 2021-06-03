@@ -19,9 +19,9 @@ from db_connection import crear_nueva_conexion
 
 
 #diccionarios
-dicc_tabs = {"preforza":["nutrición","fungicidas","herbicidas"], 
-        "postforza":["nutrición","fungicidas","hormonas"],
-        "semillero":["nutrición","fungicidas","herbicidas"]}
+dicc_tabs = {"preforza":["nutrición","protección","herbicidas"], 
+        "postforza":["nutrición","inducción","insecticidas","protectorsolar","maduración"],
+        "semillero":["nutrición","protección","herbicidas"]}
 
         # El tipo de aplicación por defecto es nutrición
 dicc_diccs_hrefs = {"preforza": {"Comparación por grupos": ["/preforza-comparar-grupos#nutricion", "comparar-grupos-link"],

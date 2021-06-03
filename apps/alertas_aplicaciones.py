@@ -27,7 +27,7 @@ WITH aplicaciones_ordenadas AS (
     FROM aplicaciones 
     /* Esta es la clave para controlar por estado del cultivo */
     WHERE bloque in (SELECT bloque FROM blocks_desarrollo WHERE finduccion is null ) AND
-    categoria = 'fertilizante'
+    categoria = 'nutricion'
     AND etapa in %s
     AND grupo is not NULL
     AND bloque is not NULL
@@ -54,7 +54,7 @@ WITH aplicaciones_ordenadas AS (
     FROM aplicaciones 
     /* Esta es la clave para controlar por estado del cultivo */
     WHERE bloque not in (SELECT bloque FROM cosecha_resumen) AND
-    categoria = 'fertilizante'
+    categoria = 'nutricion'
     AND etapa in %s
     AND grupo is not NULL
     AND bloque is not NULL
@@ -81,7 +81,7 @@ WITH aplicaciones_ordenadas AS (
     FROM aplicaciones 
     /* Esta es la clave para controlar por estado del cultivo */
     WHERE blocknumber in (SELECT blocknumber FROM siembra WHERE estado in ('3','7')) AND
-    categoria = 'fertilizante'
+    categoria = 'nutricion'
     AND etapa in %s
     AND grupo is not NULL
     AND bloque is not NULL

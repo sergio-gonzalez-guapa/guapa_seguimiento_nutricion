@@ -1,3 +1,4 @@
+catboost==0.25.1
 plotly==4.4.1
 psycopg2==2.8.5
 dash_html_components==1.0.3

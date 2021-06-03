@@ -346,7 +346,7 @@ def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,a
         "semillero":"Post Poda",
         "nutricion":"fertilizante",
         "herbicidas":"herbicida",
-        "fungicidas":"fungicida",
+        "proteccion":"proteccion",
         "insecticidas":"insecticida"}
 
         
