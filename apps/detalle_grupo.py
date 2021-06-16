@@ -1,23 +1,16 @@
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
-import dash_html_components as html
 import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
-from dash.dependencies import Input, Output, State
-import db_connection
 import plotly.express as px
 
-import numpy as np
-from app import app,cache
-from .layouts_predefinidos import elementos 
+import dash_html_components as html
+from dash.exceptions import PreventUpdate
+from dash.dependencies import Input, Output, State
 
-#Inicializo el layout
-layout = elementos.DashLayout()
-#Agrego los elementos vacíos pero que conforman la estructura
-layout.crear_elemento(tipo="select",element_id="select-grupo",  label="seleccione un grupo")
-layout.crear_elemento(tipo="table",element_id="detalle-grupo-table",  label="Detalle bloques")
-layout.crear_elemento(tipo="graph",element_id="peso-planta-graph",  label="Curva peso planta")
-layout.ordenar_elementos(["select-grupo","detalle-grupo-table","peso-planta-graph"])
+from app import app,cache,crear_elemento_visual
+import db_connection
+################################
+# Consultas ####################
+################################
 
 lista_grupos_siembra = '''WITH grupos_de_siembra AS (
     SELECT DISTINCT descripcion,
@@ -55,14 +48,16 @@ fecha
 FROM grupossemillero
 ORDER BY fecha'''
 
-calidad_aplicaciones = '''SELECT  bloque,
+
+calidad_aplicaciones = '''SELECT 
+CONCAT('[',bloque,'](', '/',%s,'-detalle-bloque?bloque=',bloque,'#',%s,')' ) as "bloque",
 etapa,
 categoria,
 grupo,
 finduccion,
 aplicaciones_esperadas - num_aplicaciones_realizadas as "aplicaciones pendientes",
-aplicaciones_con_retraso,
-aplicaciones_muy_proximas
+aplicaciones_con_retraso as "aplicaciones con retraso",
+aplicaciones_muy_proximas as "aplicaciones adelantadas"
 FROM calidad_aplicaciones
 WHERE grupo=%s and categoria = %s'''
 
@@ -102,7 +97,22 @@ FROM blocks_desarrollo
 where grupo_forza = %s
 '''
 
+#################
+# Layout ########
+#################
 
+layout = html.Div([
+    crear_elemento_visual(tipo="dbc_select",element_id="select-grupo",params={"label":"seleccione un grupo"}),
+    crear_elemento_visual(tipo="dash_table",element_id='detalle-grupo-table'),
+    crear_elemento_visual(tipo="graph",element_id="peso-planta-graph")
+    ])
+
+
+##############################
+# Funciones  #################
+##############################
+
+@cache.memoize()
 def query_para_select(etapa):
     consulta=None
     print(etapa)
@@ -118,49 +128,32 @@ def query_para_select(etapa):
     opciones = [{"label":row["label"],"value":row["value"]} for _,row in consulta.iterrows()]
     return opciones
 
+@cache.memoize()
 def query_para_tabla(grupo, etapa, categoria):
     dicc_etapa = {"preforza":{"GS":"Post Siembra","RC":"Post Deshija"},
     "postforza":{"GF":"Post Forza"},
     "semillero":{"GS":"Post Deshija"}}
 
-    dicc_categoria = {"nutricion":"fertilizante",
-    "fungicidas":"fungicida","herbicidas":"herbicida" ,
-    "hormonas":"hormonas"}
+    dicc_categoria = {"nutricion":"nutricion",
+    "proteccion":"proteccion","herbicidas":"herbicida" ,
+    "induccion":"induccion","induccion":"induccion","protectorsolar":"protectorsolar"}
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or grupo==None:
         print("hay un error en el bloque",grupo, etapa, categoria)
         return None
     
     prefijo = grupo[0:2]
     if prefijo not in ["GF","GS","RC"]:
+        print("hay un error en el prefijo")
         return None
 
-    etapa_query = dicc_etapa[etapa][prefijo]
+    # etapa_query = dicc_etapa[etapa][prefijo]
     categoria_query = dicc_categoria[categoria]
     
-    consulta = db_connection.query(calidad_aplicaciones, [grupo,categoria_query])
+    print("parámetros:",etapa,categoria_query,grupo,categoria_query)
+    return db_connection.query(calidad_aplicaciones, [etapa,categoria_query,grupo,categoria_query]).fillna("")
 
-    table_header = [html.Thead(html.Tr([ html.Th(col) for col in consulta.columns]))]
 
-    rows = []
-    for row in consulta.itertuples(index=False):
-        #Aquí debo poner la lógica los anchor para el vínculo que me lleve al grupo correspondiente
-        dict_tuple = row._asdict()
-        new_row=[]
-        for k,v in dict_tuple.items():
-            if v ==None:
-                new_row.append(html.Td(v))
-            elif k =="bloque":
-                new_row.append(html.Td(dcc.Link(v,href=f"/{etapa}-detalle-bloque?bloque={v}#{categoria}") ))
-            else:
-                new_row.append(html.Td(v))
-        
-        rows.append(html.Tr(new_row))
-    
-    table_body = [html.Tbody(rows)]
-    table = dbc.Table(table_header + table_body, bordered=True)
-
-    return table.children
-
+@cache.memoize()
 def query_para_grafica(grupo,categoria,etapa):
 
     
@@ -188,12 +181,11 @@ def query_para_grafica(grupo,categoria,etapa):
     return fig
 
 
-#####################
-# Callbacks #########
-#####################
+##############################
+# Callbacks  #################
+##############################
 
 @app.callback(Output("select-grupo", "options"), [Input('pathname-intermedio','children')],[State("url","pathname")])
-@cache.memoize()
 def actualizar_select_bloque(path,url):
     etapa = url.split("-")[0][1:]
     if path =='detalle-grupo':
@@ -201,9 +193,9 @@ def actualizar_select_bloque(path,url):
 
     return None
 
-#Callback para seleccionar estado según search location
+#Callback para seleccionar estado según search location desde hipervínculo de otro menú
 @app.callback(Output("select-grupo", "value"), [Input('url','search')],[State('pathname-intermedio','children')])
-@cache.memoize()
+
 def actualizar_valor_select_lote(search, path):
     if "detalle-grupo" in path:
         busqueda = search.split("=")
@@ -213,17 +205,21 @@ def actualizar_valor_select_lote(search, path):
             return busqueda[1]
     return None
 
-@app.callback([Output("detalle-grupo-table", "children"),Output("peso-planta-graph", "figure")],
+#Actualización de peso planta y detalle grupo
+@app.callback([Output("detalle-grupo-table", "data"),Output('detalle-grupo-table', 'columns'),
+Output("peso-planta-graph", "figure")],
  [Input("select-grupo", "value")],
  [State("url","pathname"),State("url","hash")])
-@cache.memoize()
 def actualizar_tabla(grupo, path, hash):
+    if grupo is None:
+        raise PreventUpdate
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]
-    tabla= query_para_tabla(grupo,etapa,categoria)
+    df= query_para_tabla(grupo,etapa,categoria)
     
     fig = query_para_grafica(grupo,categoria,etapa)
-    return tabla,fig
+    
+    return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],fig
 
 
 

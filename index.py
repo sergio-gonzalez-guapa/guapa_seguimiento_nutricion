@@ -87,14 +87,14 @@ lista_nombres_tabs =["Nutrición","Fungicidas","Herbicidas"]
 # "complete" layout to supress callback exceptions
 app.validation_layout = html.Div([
     url_bar_and_content_div,
-    eb.layout.salida,
-    db.layout.salida,
-    dg.layout.salida,
+    eb.layout,
+    db.layout,
+    dg.layout,
     aa.layout.salida,
-    pa.layout.salida,
+    pa.layout,
     forzamiento.layout.salida,
     shared.crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs),
-    cg.layout.salida
+    cg.layout
     
 ])
 
@@ -105,13 +105,13 @@ def display_page(pathname):
         return 'Home', 'Home'     
 
     if pathname == '/estado-bloques':
-        return eb.layout.salida, 'estado-bloques'
+        return eb.layout, 'estado-bloques'
 
     if pathname == '/alertas-aplicaciones':
         return aa.layout.salida, 'alertas-aplicaciones'
     
     if pathname == '/programacion-aplicaciones':
-        return pa.layout.salida, 'programacion-aplicaciones'
+        return pa.layout, 'programacion-aplicaciones'
 
     if pathname == '/listado-forzamiento':
         return forzamiento.layout.salida, 'listado-forzamiento'
@@ -149,11 +149,11 @@ def switch_tab(hash, path):
     funcionalidad = "-".join(path.split("-")[1:])
     #Tener en cuenta cambio de hash a vacío!
     if funcionalidad =="detalle-grupo":
-        return dg.layout.salida 
+        return dg.layout
     elif funcionalidad =="detalle-bloque":
-        return db.layout.salida
+        return db.layout
     elif funcionalidad=="comparar-grupos":
-        return cg.layout.salida
+        return cg.layout
     else:
         return None
 

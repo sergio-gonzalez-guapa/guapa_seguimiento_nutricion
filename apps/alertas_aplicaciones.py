@@ -1,7 +1,11 @@
+import pandas as pd
+import plotly.express as px
+from datetime import datetime
+import numpy as np
+
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 import dash_html_components as html
-import pandas as pd
 from dash.dependencies import Input, Output, State
 from dash_extensions import Download
 from dash_extensions.snippets import send_bytes
@@ -9,12 +13,12 @@ from dash.exceptions import PreventUpdate
 
 
 import db_connection
-import plotly.express as px
-from datetime import datetime
-import numpy as np
-from app import app,cache, dbc_table_to_pandas
+from app import app,cache, dbc_table_to_pandas, crear_elemento_visual
 from .layouts_predefinidos import elementos 
 
+################################
+# Consultas ####################
+################################
 
 consulta_aplicaciones_preforza = '''
 WITH aplicaciones_ordenadas AS (
@@ -97,25 +101,67 @@ FROM aplicaciones_ordenadas
 WHERE rn = 1
 '''
 
-#Layout
+consulta_bloques_nuevos = """SELECT bloque,
+fecha_siembra,
+DATE_PART('day',now()-fecha_siembra)::integer AS dias_sin_aplicacion
+FROM blocks_desarrollo 
+WHERE finduccion is null 
+AND bloque NOT IN (select distinct bloque 
+FROM aplicaciones)
+"""
+
+
+#################
+# Layout ########
+#################
+
 
 nombres_tabs_nutricion = ["preforza","semillero","postforza"]
 
-def crear_tabs (lista_nombres,id_objeto):
-    lista_tabs = []
+# def crear_tabs (lista_nombres,id_objeto):
+#     lista_tabs = []
 
-    for index,value in enumerate(lista_nombres):
-        tab_nueva = dbc.Tab(label=value, tab_id="tab-"+str(index))
-        lista_tabs.append(tab_nueva)
+#     for index,value in enumerate(lista_nombres):
+#         tab_nueva = dbc.Tab(label=value, tab_id="tab-"+str(index))
+#         lista_tabs.append(tab_nueva)
 
 
-    return dbc.Tabs(
-            lista_tabs,
-            id=id_objeto,
-            active_tab="tab-0",
-        )
+#     return dbc.Tabs(
+#             lista_tabs,
+#             id=id_objeto,
+#             active_tab="tab-0",
+#         )
 
-tabs_alertas_nutricion = crear_tabs(nombres_tabs_nutricion,"tabs-alertas-nutricion")
+# tabs_alertas_nutricion = crear_tabs(nombres_tabs_nutricion,"tabs-alertas-nutricion")
+
+tabs_alertas_nutricion = crear_elemento_visual(tipo="tabs",element_id="tabs-alertas-nutricion",
+params={"names_list":["preforza","semillero","postforza"]})
+
+exportar_a_excel_input = dbc.FormGroup(
+    [
+        dbc.Button("Exportar a Excel",id="exportar-alertas-excel-btn", color="success", className="mr-1"),
+        Download(id="download-alertas")
+    ]
+)
+form_programacion = dbc.Form([exportar_a_excel_input])
+
+# layout = elementos.DashLayout(extra_elements=[form_programacion,tabs_alertas_nutricion])
+
+# layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición")
+# layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
+# layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
+
+
+layout = html.Div([
+    form_programacion,
+    tabs_alertas_nutricion,
+    crear_elemento_visual(tipo="dash_table",element_id='aplicaciones-pendientes-table'),
+    crear_elemento_visual(tipo="dash_table",element_id='bloques-nuevos-table')
+    
+    ])
+##############################
+# Funciones  #################
+##############################
 
 @cache.memoize()
 def generar_alertas_bloques_actuales (etapa):
@@ -126,33 +172,10 @@ def generar_alertas_bloques_actuales (etapa):
     else: 
         return db_connection.query(consulta_aplicaciones_semillero,[etapa])
 
-consulta_bloques_nuevos = """SELECT bloque,
-fecha_siembra,
-DATE_PART('day',now()-fecha_siembra)::integer AS dias_sin_aplicacion
-FROM blocks_desarrollo 
-WHERE finduccion is null 
-AND bloque NOT IN (select distinct bloque 
-FROM aplicaciones)
-"""
+
 @cache.memoize()
 def generar_alertas_bloques_nuevos ():
     return db_connection.query(consulta_bloques_nuevos)
-
-
-exportar_a_excel_input = dbc.FormGroup(
-    [
-        dbc.Button("Exportar a Excel",id="exportar-alertas-excel-btn", color="success", className="mr-1"),
-        Download(id="download-alertas")
-    ]
-)
-form_programacion = dbc.Form([exportar_a_excel_input])
-
-layout = elementos.DashLayout(extra_elements=[form_programacion,tabs_alertas_nutricion])
-
-layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición")
-layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
-layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
-
 
 ###################
 ##### Callbacks ###

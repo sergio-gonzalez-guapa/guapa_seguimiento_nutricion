@@ -1,10 +1,11 @@
 import dash
 import dash_bootstrap_components as dbc
+import dash_core_components as dcc
 import pandas as pd
 from flask_caching import Cache
 
 import locale 
-
+import dash_table
 locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 
 # Exportar a excel
@@ -49,3 +50,129 @@ cache = Cache(app.server,config={
 
 })
 server = app.server
+
+def crear_elemento_visual(tipo,element_id,params=None,encerrado=True):
+
+    elemento=None
+
+    if tipo=="dbc_select":
+        label = params["label"]
+        
+        elemento = dbc.InputGroup(
+                [
+                    dbc.InputGroupAddon(label, addon_type="prepend"),
+                    dbc.Select(id=element_id)
+                    
+                ]
+            )
+
+    elif tipo=="dash_table":
+
+        params_dash_table = {"id":element_id,
+        "markdown_options":{"link_target": '_self'},
+        "fixed_rows":{'headers': True},"fixed_columns":{'headers':True},
+        "style_table":{'height': 500, 'overflowX': 'auto','minWidth':"100%"},
+        "style_cell":{'height': 'auto',# Esta configuración de style cell junto con overflowx permite tener barra de desplazamiento horizontal para que ninguna celda se alargue verticalmente abruptamente
+            'minWidth': '120px', 'width': '120px', 'maxWidth': '120px','whiteSpace': 'pre-line'},
+        "style_header":{'backgroundColor': 'white','fontWeight': 'bold',"min-width": 50},
+        "filter_action":"native",
+        "style_data_conditional":[
+            {
+                'if': {'row_index': 'odd'},'backgroundColor': 'rgb(248, 248, 248)'
+            }
+        ]
+
+        }
+        
+        elemento = dash_table.DataTable(**params_dash_table)
+
+    
+    elif tipo=="graph":
+
+        elemento = dcc.Graph(config={
+        'displayModeBar': True},id=element_id )
+
+    elif tipo=="slider":
+
+        elemento = dbc.FormGroup(
+    [
+        dbc.Label(params["label"], html_for=element_id),
+        dcc.RangeSlider(
+        id=element_id,
+        min=params["min"],
+        max=params["max"],
+        step=1,
+        value=params["value"],
+        marks=params["marks"]
+    ),
+        dbc.FormText(
+            params["sublabel"],
+            color="secondary",
+        ),
+    ]
+)
+    elif tipo=="vertical-slider":
+
+        elemento = dbc.FormGroup(
+    [
+        dbc.Label(params["label"], html_for=element_id),
+        dcc.RangeSlider(
+        id=element_id,
+        min=params["min"],
+        max=params["max"],
+        step=1,
+        value=params["value"],
+        marks=params["marks"],
+        vertical=True,
+        verticalHeight=150
+    )
+    ]
+)
+    elif tipo=="checklist":
+
+        elemento = dbc.FormGroup(
+    [
+        dbc.Label(params["label"], html_for=element_id),
+        dbc.Col(
+            dbc.Checklist(
+                id=element_id,
+                options=params["options"],
+            ),
+            width=8,
+        ),
+    ],
+    row=False,
+)
+    elif tipo=="number-input":
+
+        elemento = dbc.FormGroup(
+    [
+        dbc.Label(params["label"], html_for=element_id),
+        dbc.Input(id = element_id,type="number", min = params["min"], max=params["max"], step=1),
+    ]
+)
+    elif tipo=="tabs":
+        lista_tabs = []
+        
+        for index,value in enumerate(params["names_list"] ):
+            tab_nueva = dbc.Tab(label=value, tab_id="tab-"+str(index))
+            lista_tabs.append(tab_nueva)
+
+        elemento = dbc.Tabs(
+            lista_tabs,
+            id=element_id,
+            active_tab="tab-0",
+        )
+
+    else:
+        raise Exception(f"el tipo de elemento {tipo} no está definido")
+    
+    
+    if encerrado:
+        elemento = dbc.Card(
+            dbc.CardBody(elemento),
+            className="mt-3")
+
+    return elemento
+
+
