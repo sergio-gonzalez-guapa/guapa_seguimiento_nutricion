@@ -23,10 +23,11 @@ concat(desarrollo,blocknumber)  as value
 
 
 aplicaciones_bloque = '''SELECT blocknumber,
+codigo_cedula as "codigo cédula",
 fecha,
 descripcion_formula as formula,
 motivo,
-DATE_PART('day',dias_diferencia) as dias_diferencia
+DATE_PART('day',dias_diferencia) as "dias desde la aplicación anterior"
 from aplicaciones
 WHERE bloque =%s AND etapa = %s AND categoria = %s
 ORDER BY fecha'''
@@ -40,8 +41,11 @@ from pesoplanta where llave =%s '''
 
 layout = html.Div([
     crear_elemento_visual(tipo="dbc_select",element_id="select-bloque",params={"label":"seleccione un bloque"}),
+    html.H1("Calidad de aplicaciones"),
     crear_elemento_visual(tipo="graph",element_id="aplicaciones-bloque-graph"),
+    html.H1("Muestreo variable de interés"),
     crear_elemento_visual(tipo="graph",element_id="peso-planta-bloque-graph"),
+    html.H1("Detalle aplicaciones"),
     crear_elemento_visual(tipo="dash_table",element_id='detalle-bloque-table')
     ])
 
@@ -61,7 +65,7 @@ def query_para_select():
 def query_para_grafica(tabla_aplicaciones):
     if tabla_aplicaciones.empty:
         return px.scatter()
-    tabla_aplicaciones["calificacion"]= tabla_aplicaciones["dias_diferencia"].apply(lambda x: 1 if x is None else 1 if x<10 else 2 if x<20 else 3)
+    tabla_aplicaciones["calificacion"]= tabla_aplicaciones["dias desde la aplicación anterior"].apply(lambda x: 1 if x is None else 1 if x<10 else 2 if x<20 else 3)
     tabla_aplicaciones["color"]= tabla_aplicaciones["calificacion"].apply(lambda x: "debajo del rango" if x==1 else "en rango" if x==2 else "encima del rango")
 
     fig = px.scatter(tabla_aplicaciones, x="fecha", y="calificacion",color="color",
@@ -88,7 +92,7 @@ def query_para_grafica_peso_planta(bloque,categoria):
     if consulta.empty:
         return px.scatter()
 
-    fig =px.violin(consulta,x="fecha" ,y="valor",box=True, points='all')
+    fig =px.violin(consulta,x="fecha" ,y="valor",box=True, points='all',title="Peso planta")
     return fig
 
 @cache.memoize()

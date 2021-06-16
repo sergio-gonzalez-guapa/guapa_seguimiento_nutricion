@@ -69,6 +69,7 @@ def crear_elemento_visual(tipo,element_id,params=None,encerrado=True):
     elif tipo=="dash_table":
 
         params_dash_table = {"id":element_id,
+        "sort_action":"native",
         "markdown_options":{"link_target": '_self'},
         "fixed_rows":{'headers': True},"fixed_columns":{'headers':True},
         "style_table":{'height': 500, 'overflowX': 'auto','minWidth':"100%"},

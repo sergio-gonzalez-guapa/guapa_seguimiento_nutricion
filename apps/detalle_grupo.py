@@ -51,13 +51,12 @@ ORDER BY fecha'''
 
 calidad_aplicaciones = '''SELECT 
 CONCAT('[',bloque,'](', '/',%s,'-detalle-bloque?bloque=',bloque,'#',%s,')' ) as "bloque",
-etapa,
-categoria,
-grupo,
-finduccion,
-aplicaciones_esperadas - num_aplicaciones_realizadas as "aplicaciones pendientes",
-aplicaciones_con_retraso as "aplicaciones con retraso",
-aplicaciones_muy_proximas as "aplicaciones adelantadas"
+fecha_siembra as "fecha de siembra",
+finduccion as "fecha de inducción",
+aplicaciones_esperadas - num_aplicaciones_realizadas as "# de aplicaciones pendientes (programadas - realizadas)",
+num_aplicaciones_realizadas as "# de aplicaciones realizadas",
+aplicaciones_con_retraso as "# de aplicaciones realizadas con retraso",
+aplicaciones_muy_proximas as "# de aplicaciones realizadas anticipadamente"
 FROM calidad_aplicaciones
 WHERE grupo=%s and categoria = %s'''
 
@@ -97,20 +96,51 @@ FROM blocks_desarrollo
 where grupo_forza = %s
 '''
 
+aplicaciones_grupo = ''' WITH apls as (SELECT blocknumber,
+codigo_cedula as "codigo cédula",
+fecha,
+descripcion_formula as formula
+from aplicaciones
+WHERE grupo =%s AND etapa = %s AND categoria = %s
+ORDER BY fecha)
+
+select "codigo cédula",
+fecha as "fecha aplicación",
+formula,
+  string_agg(blocknumber, ', ') as bloques
+
+from apls
+group by "codigo cédula",formula,fecha
+ORDER BY fecha
+
+'''
+
 #################
 # Layout ########
 #################
 
 layout = html.Div([
     crear_elemento_visual(tipo="dbc_select",element_id="select-grupo",params={"label":"seleccione un grupo"}),
+    html.H1("Calidad de aplicaciones"),
     crear_elemento_visual(tipo="dash_table",element_id='detalle-grupo-table'),
-    crear_elemento_visual(tipo="graph",element_id="peso-planta-graph")
+    html.H1("Comparativo de muestreos"),
+    crear_elemento_visual(tipo="graph",element_id="peso-planta-graph"),
+    html.H1("Aplicaciones del grupo"),
+    crear_elemento_visual(tipo="dash_table",element_id='aplicaciones-grupo-table')
     ])
 
 
 ##############################
 # Funciones  #################
 ##############################
+
+dicc_etapa = {"preforza":{"GS":"Post Siembra","RC":"Post Deshija"},
+"postforza":{"GF":"Post Forza"},
+"semillero":{"GS":"Post Deshija"}}
+
+dicc_categoria = {"nutricion":"nutricion",
+"proteccion":"proteccion","herbicidas":"herbicida" ,
+"induccion":"induccion","induccion":"induccion","protectorsolar":"protectorsolar"}
 
 @cache.memoize()
 def query_para_select(etapa):
@@ -130,13 +160,7 @@ def query_para_select(etapa):
 
 @cache.memoize()
 def query_para_tabla(grupo, etapa, categoria):
-    dicc_etapa = {"preforza":{"GS":"Post Siembra","RC":"Post Deshija"},
-    "postforza":{"GF":"Post Forza"},
-    "semillero":{"GS":"Post Deshija"}}
 
-    dicc_categoria = {"nutricion":"nutricion",
-    "proteccion":"proteccion","herbicidas":"herbicida" ,
-    "induccion":"induccion","induccion":"induccion","protectorsolar":"protectorsolar"}
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or grupo==None:
         print("hay un error en el bloque",grupo, etapa, categoria)
         return None
@@ -152,6 +176,24 @@ def query_para_tabla(grupo, etapa, categoria):
     print("parámetros:",etapa,categoria_query,grupo,categoria_query)
     return db_connection.query(calidad_aplicaciones, [etapa,categoria_query,grupo,categoria_query]).fillna("")
 
+@cache.memoize()
+def query_para_tabla_aplicaciones(grupo, etapa, categoria):
+
+    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or grupo==None:
+        print("hay un error en el bloque",grupo, etapa, categoria)
+        return None
+    
+    prefijo = grupo[0:2]
+    if prefijo not in ["GF","GS","RC"]:
+        print("hay un error en el prefijo")
+        return None
+
+    etapa_query = dicc_etapa[etapa][prefijo]
+    categoria_query = dicc_categoria[categoria]
+    
+    resultado = db_connection.query(aplicaciones_grupo, [grupo,etapa_query,categoria_query])
+    resultado["fecha aplicación"]=resultado["fecha aplicación"].dt.strftime('%d-%B-%Y')
+    return resultado
 
 @cache.memoize()
 def query_para_grafica(grupo,categoria,etapa):
@@ -207,6 +249,7 @@ def actualizar_valor_select_lote(search, path):
 
 #Actualización de peso planta y detalle grupo
 @app.callback([Output("detalle-grupo-table", "data"),Output('detalle-grupo-table', 'columns'),
+Output("aplicaciones-grupo-table", "data"),Output('aplicaciones-grupo-table', 'columns'),
 Output("peso-planta-graph", "figure")],
  [Input("select-grupo", "value")],
  [State("url","pathname"),State("url","hash")])
@@ -216,10 +259,15 @@ def actualizar_tabla(grupo, path, hash):
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]
     df= query_para_tabla(grupo,etapa,categoria)
-    
+    df_data = df.to_dict('records')
+    df_cols =  [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns]
+
+    df_aplicaciones = query_para_tabla_aplicaciones(grupo, etapa, categoria)
+    df_aplicaciones_data = df_aplicaciones.to_dict('records')
+    df_aplicaciones_cols =  [{"name": i, "id": i,'presentation':'markdown'} for i in df_aplicaciones.columns]
     fig = query_para_grafica(grupo,categoria,etapa)
     
-    return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],fig
+    return df_data,df_cols,df_aplicaciones_data,df_aplicaciones_cols,fig
 
 
 

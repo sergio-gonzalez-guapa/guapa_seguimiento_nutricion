@@ -128,7 +128,9 @@ layout = html.Div([
 html.H5("", id="h3-rango-inferior"),
 html.H5("", id="h3-rango-superior"),
  form_boton,
+ html.H1("Calidad de aplicaciones por mes"),
     crear_elemento_visual(tipo="graph",element_id="calidad-aplicaciones-mensual-graph"),
+html.H1("Calidad de aplicaciones por grupos"),
     crear_elemento_visual(tipo="dash_table",element_id='comparar-grupos-table'),
     
     

@@ -41,7 +41,9 @@ FROM historia_bloques where lote = %s'''
 
 
 layout = html.Div([
+    
     crear_elemento_visual(tipo="dbc_select",element_id="select-lote",params={"label":"Seleccione un lote"}),
+    html.H1("Estado de bloques"),
     crear_elemento_visual(tipo="dash_table",element_id='estado-bloques-table')
     ])
 
