@@ -118,24 +118,24 @@ FROM aplicaciones)
 
 nombres_tabs_nutricion = ["preforza","semillero","postforza"]
 
-# def crear_tabs (lista_nombres,id_objeto):
-#     lista_tabs = []
+def crear_tabs (lista_nombres,id_objeto):
+    lista_tabs = []
 
-#     for index,value in enumerate(lista_nombres):
-#         tab_nueva = dbc.Tab(label=value, tab_id="tab-"+str(index))
-#         lista_tabs.append(tab_nueva)
+    for index,value in enumerate(lista_nombres):
+        tab_nueva = dbc.Tab(label=value, tab_id="tab-"+str(index))
+        lista_tabs.append(tab_nueva)
 
 
-#     return dbc.Tabs(
-#             lista_tabs,
-#             id=id_objeto,
-#             active_tab="tab-0",
-#         )
+    return dbc.Tabs(
+            lista_tabs,
+            id=id_objeto,
+            active_tab="tab-0",
+        )
 
-# tabs_alertas_nutricion = crear_tabs(nombres_tabs_nutricion,"tabs-alertas-nutricion")
+tabs_alertas_nutricion = crear_tabs(nombres_tabs_nutricion,"tabs-alertas-nutricion")
 
-tabs_alertas_nutricion = crear_elemento_visual(tipo="tabs",element_id="tabs-alertas-nutricion",
-params={"names_list":["preforza","semillero","postforza"]})
+# tabs_alertas_nutricion = crear_elemento_visual(tipo="tabs",element_id="tabs-alertas-nutricion",
+# params={"names_list":["preforza","semillero","postforza"]})
 
 exportar_a_excel_input = dbc.FormGroup(
     [
@@ -145,20 +145,20 @@ exportar_a_excel_input = dbc.FormGroup(
 )
 form_programacion = dbc.Form([exportar_a_excel_input])
 
-# layout = elementos.DashLayout(extra_elements=[form_programacion,tabs_alertas_nutricion])
+layout = elementos.DashLayout(extra_elements=[form_programacion,tabs_alertas_nutricion])
 
-# layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición")
-# layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
-# layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
+layout.crear_elemento(tipo="table",element_id="aplicaciones-pendientes-table",  label="Últimas aplicaciones nutrición")
+layout.crear_elemento(tipo="table",element_id="bloques-nuevos-table",  label="Bloques recien sembrados sin aplicación")
+layout.ordenar_elementos(["aplicaciones-pendientes-table","bloques-nuevos-table"])
 
 
-layout = html.Div([
-    form_programacion,
-    tabs_alertas_nutricion,
-    crear_elemento_visual(tipo="dash_table",element_id='aplicaciones-pendientes-table'),
-    crear_elemento_visual(tipo="dash_table",element_id='bloques-nuevos-table')
+# layout = html.Div([
+#     form_programacion,
+#     tabs_alertas_nutricion,
+#     crear_elemento_visual(tipo="dash_table",element_id='aplicaciones-pendientes-table'),
+#     crear_elemento_visual(tipo="dash_table",element_id='bloques-nuevos-table')
     
-    ])
+#     ])
 ##############################
 # Funciones  #################
 ##############################
