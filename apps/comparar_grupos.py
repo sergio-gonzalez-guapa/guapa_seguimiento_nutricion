@@ -3,6 +3,8 @@ import datetime
 import io
 from dateutil.relativedelta import relativedelta
 import plotly.express as px
+import marko
+from bs4 import BeautifulSoup
 
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
@@ -98,12 +100,7 @@ boton_aplicar_filtros = dbc.FormGroup(
             dbc.Button("Aplicar filtros",id="filtrar-grupos-btn", color="primary", className="mr-1"),
             width=10,
         ),
-        html.Br(),
-        dbc.Col(
-            dbc.Button("Exportar a Excel",id="exportar-excel-btn", color="success", className="mr-1"),
-            width=10,
-        ),
-        Download(id="download")
+        html.Br()
     ],
     row=True,
 )
@@ -131,6 +128,11 @@ html.H5("", id="h3-rango-superior"),
  html.H1("Calidad de aplicaciones por mes"),
     crear_elemento_visual(tipo="graph",element_id="calidad-aplicaciones-mensual-graph"),
 html.H1("Calidad de aplicaciones por grupos"),
+        dbc.Col(
+            dbc.Button("Exportar a Excel",id="exportar-comparacion-btn", color="success", className="mr-1"),
+            width=10,
+        ),
+        Download(id="download-comparacion"),
     crear_elemento_visual(tipo="dash_table",element_id='comparar-grupos-table'),
     
     
@@ -288,23 +290,21 @@ def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,a
         return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],dias_objetivo ,limite_inferior , limite_superior,histograma
     return None,None, "","","", px.scatter()
 
-# @app.callback(
-# Output("download", "data"),
-# [Input("exportar-excel-btn", "n_clicks")],
-# [State("comparar-grupos-table", "children")])
-# def download_as_csv(n_clicks, table_data):
-#     if (not n_clicks) or (table_data is None):
-#       raise PreventUpdate
-#     df = dbc_table_to_pandas(table_data)
+@app.callback(
+Output("download-comparacion", "data"),
+[Input("exportar-comparacion-btn", "n_clicks")],
+[State("comparar-grupos-table", "data")])
+def download_as_csv(n_clicks, table_data):
 
-#     # download_buffer = io.StringIO()
-#     # df.to_csv(download_buffer, index=False)
-#     # download_buffer.seek(0)
-#     # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
+    if (not n_clicks) or (table_data is None):
+      raise PreventUpdate
 
-#     def to_xlsx(bytes_io):
-#         xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
-#         df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
-#         xslx_writer.save()
+    df = pd.DataFrame.from_dict(table_data)
+    df["grupo"] = df["grupo"].apply(lambda x: ''.join(BeautifulSoup(marko.convert(x)).findAll(text=True)))
+    df["fecha inicio siembra"] = df["fecha inicio siembra"].apply(lambda x: ''.join(BeautifulSoup(marko.convert(x)).findAll(text=True)))
+    def to_xlsx(bytes_io):
+        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
+        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
+        xslx_writer.save()
 
-#     return send_bytes(to_xlsx, "comparacion_grupos.xlsx")
+    return send_bytes(to_xlsx, "comparacion_grupos.xlsx")

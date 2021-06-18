@@ -60,26 +60,18 @@ ORDER BY fecha,formula
 # Layout ########
 #################
 
-# exportar_a_excel_input = dbc.FormGroup(
-#     [
-#         dbc.Button("Exportar a Excel",id="exportar-programacion-excel-btn", color="success", className="mr-1"),
-#         Download(id="download-programacion")
-#     ]
-# )
-
-# form_programacion = dbc.Form([year_input, week_input,exportar_a_excel_input])
-
-# #Inicializo el layout
-# layout = elementos.DashLayout(extra_elements=[form_programacion])
-# #Agrego elementos
-# layout.crear_elemento(tipo="table",element_id="programacion-aplicaciones-table",  label="Aplicaciones programadas según PPC")
-
-# layout.ordenar_elementos(["programacion-aplicaciones-table"])
+exportar_a_excel_input = dbc.FormGroup(
+    [
+        dbc.Button("Exportar a Excel",id="exportar-programacion-excel-btn", color="success", className="mr-1"),
+        Download(id="download-programacion")
+    ]
+)
 
 layout = html.Div([
     crear_elemento_visual(tipo="dbc_select",element_id="select-year-programacion-aplicaciones",params={"label":"Seleccione el año"}),
     crear_elemento_visual(tipo="number-input",element_id="input-week-programacion-aplicaciones",
     params={"label":"Ingrese el número de la semana","min":1,"max":53}),
+    exportar_a_excel_input,
     crear_elemento_visual(tipo="dash_table",element_id='programacion-aplicaciones-table')
     ])
 ##############################
@@ -131,30 +123,24 @@ def actualizar_select_bloque(year,week):
     df = query_para_tabla(year,week)
     return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns]
 
-# #Exportar a excel
-# @app.callback(
-# Output("download-programacion", "data"),
-# [Input("exportar-programacion-excel-btn", "n_clicks")],
-# [State("programacion-aplicaciones-table", "children")])
-# def download_as_csv(n_clicks, table_data):
-#     if (not n_clicks) or (table_data is None):
-#       raise PreventUpdate
-    
-#     # import pickle
+#Exportar a excel
+@app.callback(
+Output("download-programacion", "data"),
+[Input("exportar-programacion-excel-btn", "n_clicks")],
+[State("programacion-aplicaciones-table", "data")])
+def download_as_csv(n_clicks, table_data):
+    if (not n_clicks) or (table_data is None):
+      raise PreventUpdate
+      
+    df = pd.DataFrame.from_dict(table_data)
+    # download_buffer = io.StringIO()
+    # df.to_csv(download_buffer, index=False)
+    # download_buffer.seek(0)
+    # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
 
+    def to_xlsx(bytes_io):
+        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
+        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
+        xslx_writer.save()
 
-#     # with open('tablita.pickle', 'wb') as handle:
-#     #     pickle.dump(table_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-#     df = dbc_table_to_pandas(table_data)
-#     # download_buffer = io.StringIO()
-#     # df.to_csv(download_buffer, index=False)
-#     # download_buffer.seek(0)
-#     # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
-
-#     def to_xlsx(bytes_io):
-#         xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
-#         df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
-#         xslx_writer.save()
-
-#     return send_bytes(to_xlsx, "programacion_aplicaciones.xlsx")
+    return send_bytes(to_xlsx, "programacion_aplicaciones.xlsx")

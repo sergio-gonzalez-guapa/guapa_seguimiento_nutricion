@@ -81,7 +81,8 @@ def crear_elemento_visual(tipo,element_id,params=None,encerrado=True):
             {
                 'if': {'row_index': 'odd'},'backgroundColor': 'rgb(248, 248, 248)'
             }
-        ]
+        ],
+        "export_format":"xlsx"
 
         }
         

@@ -1,3 +1,4 @@
+beautifulsoup4==4.9.3
 catboost==0.25.1
 plotly==4.4.1
 psycopg2==2.8.5
@@ -8,6 +9,7 @@ pandas==1.2.3
 dash_bootstrap_components==0.10.3
 dash_core_components==1.16.0
 dash-extensions==0.0.51
+marko==1.0.3
 Flask-Caching==1.10.0
 numpy==1.19.5
 Unidecode==1.1.1
