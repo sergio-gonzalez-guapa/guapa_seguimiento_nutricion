@@ -19,9 +19,9 @@ from db_connection import crear_nueva_conexion
 
 
 #diccionarios
-dicc_tabs = {"preforza":["nutrición","protección","herbicidas"], 
-        "postforza":["nutrición","inducción","insecticidas","protectorsolar","maduración"],
-        "semillero":["nutrición","protección","herbicidas"]}
+dicc_tabs = {"preforza":["nutrición","protección","herbicida"], 
+        "postforza":["nutrición","inducción","insecticida","protectorsolar","maduración"],
+        "semillero":["nutrición","protección","herbicida"]}
 
         # El tipo de aplicación por defecto es nutrición
 dicc_diccs_hrefs = {"preforza": {"Comparación por grupos": ["/preforza-comparar-grupos#nutricion", "comparar-grupos-link"],
@@ -90,9 +90,9 @@ app.validation_layout = html.Div([
     eb.layout,
     db.layout,
     dg.layout,
-    aa.layout.salida,
+    aa.layout,
     pa.layout,
-    forzamiento.layout.salida,
+    forzamiento.layout,
     shared.crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs),
     cg.layout
     
@@ -108,13 +108,13 @@ def display_page(pathname):
         return eb.layout, 'estado-bloques'
 
     if pathname == '/alertas-aplicaciones':
-        return aa.layout.salida, 'alertas-aplicaciones'
+        return aa.layout, 'alertas-aplicaciones'
     
     if pathname == '/programacion-aplicaciones':
         return pa.layout, 'programacion-aplicaciones'
 
     if pathname == '/listado-forzamiento':
-        return forzamiento.layout.salida, 'listado-forzamiento'
+        return forzamiento.layout, 'listado-forzamiento'
     comando = "selección inválida"
     funcionalidad="selección inválida"
     if pathname is None:

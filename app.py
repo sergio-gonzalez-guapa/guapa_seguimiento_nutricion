@@ -1,8 +1,14 @@
 import dash
 import dash_bootstrap_components as dbc
 import dash_core_components as dcc
+from dash_extensions import Download
+from dash.exceptions import PreventUpdate
+from dash_extensions.snippets import send_bytes
+
 import pandas as pd
 from flask_caching import Cache
+import marko
+from bs4 import BeautifulSoup
 
 import locale 
 import dash_table
@@ -38,6 +44,30 @@ def dbc_table_to_pandas (tabla):
     
     return pd.DataFrame(dicc_resultado["labels"], columns = dicc_resultado["columnas"]) 
 
+#Exportar dashtable a excel
+def export_excel_func(n_clicks, table_data, output_file_name):
+
+    if (not n_clicks) or (table_data is None):
+      raise PreventUpdate
+      
+    df = pd.DataFrame.from_dict(table_data)
+    #Extraer texto de markdown
+    df = df.applymap(lambda x: ''.join(BeautifulSoup(marko.convert(x)).findAll(text=True)) if isinstance(x, str) else x )
+
+    # download_buffer = io.StringIO()
+    # df.to_csv(download_buffer, index=False)
+    # download_buffer.seek(0)
+    # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
+
+    def to_xlsx(bytes_io):
+        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
+        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
+        xslx_writer.save()
+
+    return send_bytes(to_xlsx, output_file_name)
+
+
+
 
 #app = dash.Dash(__name__, suppress_callback_exceptions=True,external_stylesheets=[dbc.themes.FLATLY])
 app = dash.Dash(__name__, suppress_callback_exceptions=False,external_stylesheets=[dbc.themes.FLATLY])
@@ -51,6 +81,14 @@ cache = Cache(app.server,config={
 })
 server = app.server
 
+
+#Diccionarios
+
+dicc_etapa = {"preforza":{"PC":"Post Siembra","SC":"Post Deshija"},
+"postforza":{"PC":"Post Forza","SC":"Post 2da Forza"},
+"semillero":{"PC":"Post Deshija","SC":"Post Poda"}}
+
+###Funciones dash ######
 def crear_elemento_visual(tipo,element_id,params=None,encerrado=True):
 
     elemento=None
@@ -165,6 +203,15 @@ def crear_elemento_visual(tipo,element_id,params=None,encerrado=True):
             id=element_id,
             active_tab="tab-0",
         )
+
+    elif tipo=="export-excel":
+
+        elemento = dbc.FormGroup(
+    [
+        dbc.Button("Exportar a Excel",id=element_id, color="success", className="mr-1"),
+        Download(id=params["download_id"])
+    ]
+)
 
     else:
         raise Exception(f"el tipo de elemento {tipo} no está definido")

@@ -12,42 +12,57 @@ import db_connection
 # Consultas ####################
 ################################
 
-lista_grupos_siembra = '''WITH grupos_de_siembra AS (
+lista_grupos = '''WITH grupos_de_siembra AS (
     SELECT DISTINCT descripcion,
+    'preforza' as etapa,
     fecha
     FROM grupossiembra
     UNION
     SELECT DISTINCT  descripcion,
+    'preforza' as etapa,
     fecha
-    FROM grupos2dacosecha)
+    FROM grupos2dacosecha),
 
-SELECT DISTINCT descripcion AS label,
-descripcion AS value,
-fecha
-FROM grupos_de_siembra
-ORDER BY fecha'''
-
-lista_grupos_forza = '''WITH grupos_de_forza AS (
+    grupos_de_forza AS (
     SELECT DISTINCT descripcion,
+    'postforza' as etapa,
     fecha
     FROM gruposforza
     UNION
     SELECT DISTINCT  descripcion,
+    'postforza' as etapa,
     fecha
-    FROM gruposforza2)
+    FROM gruposforza2),
 
+    grupos_de_semilero AS ( SELECT DISTINCT descripcion AS label,
+    descripcion AS value,
+    'semillero' as etapa,
+    fecha
+    FROM grupossemillero
+    ORDER BY fecha)
+    
+SELECT *
+  FROM (SELECT DISTINCT descripcion AS label,
+descripcion AS value,
+etapa,
+fecha
+FROM grupos_de_siembra
+UNION 
 SELECT DISTINCT descripcion AS label,
 descripcion AS value,
+etapa,
 fecha
 FROM grupos_de_forza
-ORDER BY fecha'''
-
-lista_grupos_semillero = '''SELECT DISTINCT descripcion AS label,
-descripcion AS value,
+UNION
+SELECT DISTINCT label,
+value,
+etapa,
 fecha
-FROM grupossemillero
-ORDER BY fecha'''
+FROM grupos_de_semilero
+       ) AS U
+ WHERE U.etapa = %s
 
+ORDER BY fecha'''
 
 calidad_aplicaciones = '''SELECT 
 CONCAT('[',bloque,'](', '/',%s,'-detalle-bloque?bloque=',bloque,'#',%s,')' ) as "bloque",
@@ -61,39 +76,16 @@ FROM calidad_aplicaciones
 WHERE grupo=%s and categoria = %s'''
 
 peso_forza_grupo_siembra = '''
-SELECT *
+SELECT llave,
+fecha,
+ROUND(AVG(valor),2) as promedio
 FROM pesoplanta 
 WHERE llave IN (
     SELECT concat(desarrollo,descripcion) as llave 
     from blocks_desarrollo
     where grupo_siembra =%s 
 )
-'''
-
-info_blocks = '''
-SELECT descripcion as bloque,
-(area*(1-drenajes))/10000 as area_neta,
-poblacion,
-rango_semilla
-FROM blocks_detalle 
-where descripcion in %s
-'''
-
-info_blocks_desarrollo_gs = '''
-SELECT descripcion as bloque,
-desarrollo,
-fecha_siembra,
-finduccion
-FROM blocks_desarrollo 
-where grupo_siembra = %s
-'''
-info_blocks_desarrollo_gf = '''
-SELECT descripcion as bloque,
-desarrollo,
-fecha_siembra,
-finduccion
-FROM blocks_desarrollo 
-where grupo_forza = %s
+group by llave,fecha
 '''
 
 aplicaciones_grupo = ''' WITH apls as (SELECT blocknumber,
@@ -101,7 +93,7 @@ codigo_cedula as "codigo cédula",
 fecha,
 descripcion_formula as formula
 from aplicaciones
-WHERE grupo =%s AND etapa = %s AND categoria = %s
+WHERE grupo =%s AND etapa2 = %s AND categoria = %s
 ORDER BY fecha)
 
 select "codigo cédula",
@@ -134,88 +126,39 @@ layout = html.Div([
 # Funciones  #################
 ##############################
 
-dicc_etapa = {"preforza":{"GS":"Post Siembra","RC":"Post Deshija"},
-"postforza":{"GF":"Post Forza"},
-"semillero":{"GS":"Post Deshija"}}
-
-dicc_categoria = {"nutricion":"nutricion",
-"proteccion":"proteccion","herbicidas":"herbicida" ,
-"induccion":"induccion","induccion":"induccion","protectorsolar":"protectorsolar"}
-
 @cache.memoize()
 def query_para_select(etapa):
-    consulta=None
-    print(etapa)
-    if etapa =="preforza":
-        consulta = db_connection.query(lista_grupos_siembra)
-    elif etapa=="postforza":
-        consulta = db_connection.query(lista_grupos_forza)
-    elif etapa=="semillero":
-        consulta = db_connection.query(lista_grupos_semillero)
-    else:
-        consulta=pd.DataFrame()
-
+    consulta = db_connection.query(lista_grupos,[etapa])
     opciones = [{"label":row["label"],"value":row["value"]} for _,row in consulta.iterrows()]
     return opciones
 
 @cache.memoize()
 def query_para_tabla(grupo, etapa, categoria):
-
-    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or grupo==None:
-        print("hay un error en el bloque",grupo, etapa, categoria)
-        return None
-    
-    prefijo = grupo[0:2]
-    if prefijo not in ["GF","GS","RC"]:
-        print("hay un error en el prefijo")
-        return None
-
-    # etapa_query = dicc_etapa[etapa][prefijo]
-    categoria_query = dicc_categoria[categoria]
-    
-    print("parámetros:",etapa,categoria_query,grupo,categoria_query)
-    return db_connection.query(calidad_aplicaciones, [etapa,categoria_query,grupo,categoria_query]).fillna("")
+    return db_connection.query(calidad_aplicaciones, [etapa,categoria,grupo,categoria]).fillna("")
 
 @cache.memoize()
 def query_para_tabla_aplicaciones(grupo, etapa, categoria):
 
-    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria) or grupo==None:
-        print("hay un error en el bloque",grupo, etapa, categoria)
-        return None
-    
-    prefijo = grupo[0:2]
-    if prefijo not in ["GF","GS","RC"]:
-        print("hay un error en el prefijo")
-        return None
-
-    etapa_query = dicc_etapa[etapa][prefijo]
-    categoria_query = dicc_categoria[categoria]
-    
-    resultado = db_connection.query(aplicaciones_grupo, [grupo,etapa_query,categoria_query])
-    resultado["fecha aplicación"]=resultado["fecha aplicación"].dt.strftime('%d-%B-%Y')
+    resultado = db_connection.query(aplicaciones_grupo, [grupo,etapa,categoria])
+    if resultado.empty==False:
+        resultado["fecha aplicación"]=resultado["fecha aplicación"].dt.strftime('%d-%B-%Y')
     return resultado
 
 @cache.memoize()
 def query_para_grafica(grupo,categoria,etapa):
-
     
     #El eje x debe tener como valor meses desde el inicio del grupo de siembra
-    #Debo traer la información de los bloques con LLAVE según el GS seleccionado y solo para hash nutrición
-    if categoria!= 'nutricion' or etapa!="preforza":
+
+    if categoria!= 'nutricion':
+        return px.scatter()
+    if etapa!="preforza":
         return px.scatter()
     
     consulta = db_connection.query(peso_forza_grupo_siembra,[grupo])
-    if consulta.empty:
-        print("consulta vacía")
-        return px.scatter()
 
-    agg_dict = {
-    "promedio" : pd.NamedAgg(column='valor', aggfunc=lambda ts: ts.mean() )
-    }
-    resultado = consulta.groupby(["llave","fecha"],dropna=False).agg(**agg_dict).reset_index().round(2)
+    #Crear gráfica
+    fig = px.scatter(consulta, x="fecha", y="promedio",color="llave",hover_data=["llave"],title="Peso planta")
 
-    fig = px.scatter(resultado, x="fecha", y="promedio",color="llave",
-    hover_data=["llave"])
     fig.update_traces(mode='lines+markers')
     fig.update_xaxes(
         dtick=1209600000,
@@ -229,23 +172,24 @@ def query_para_grafica(grupo,categoria,etapa):
 
 @app.callback(Output("select-grupo", "options"), [Input('pathname-intermedio','children')],[State("url","pathname")])
 def actualizar_select_bloque(path,url):
-    etapa = url.split("-")[0][1:]
-    if path =='detalle-grupo':
+    if path !='detalle-grupo':
+        raise PreventUpdate
+    else:
+        etapa = url.split("-")[0][1:]
         return query_para_select(etapa)
-
-    return None
 
 #Callback para seleccionar estado según search location desde hipervínculo de otro menú
 @app.callback(Output("select-grupo", "value"), [Input('url','search')],[State('pathname-intermedio','children')])
 
 def actualizar_valor_select_lote(search, path):
-    if "detalle-grupo" in path:
+    if "detalle-grupo" not in path:
+        raise PreventUpdate
+    else :
         busqueda = search.split("=")
         if len(busqueda)<2:
             return None
         else:
             return busqueda[1]
-    return None
 
 #Actualización de peso planta y detalle grupo
 @app.callback([Output("detalle-grupo-table", "data"),Output('detalle-grupo-table', 'columns'),
@@ -254,10 +198,12 @@ Output("peso-planta-graph", "figure")],
  [Input("select-grupo", "value")],
  [State("url","pathname"),State("url","hash")])
 def actualizar_tabla(grupo, path, hash):
+
     if grupo is None:
         raise PreventUpdate
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]
+
     df= query_para_tabla(grupo,etapa,categoria)
     df_data = df.to_dict('records')
     df_cols =  [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns]
@@ -265,6 +211,7 @@ def actualizar_tabla(grupo, path, hash):
     df_aplicaciones = query_para_tabla_aplicaciones(grupo, etapa, categoria)
     df_aplicaciones_data = df_aplicaciones.to_dict('records')
     df_aplicaciones_cols =  [{"name": i, "id": i,'presentation':'markdown'} for i in df_aplicaciones.columns]
+
     fig = query_para_grafica(grupo,categoria,etapa)
     
     return df_data,df_cols,df_aplicaciones_data,df_aplicaciones_cols,fig

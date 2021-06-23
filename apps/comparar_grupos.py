@@ -3,8 +3,7 @@ import datetime
 import io
 from dateutil.relativedelta import relativedelta
 import plotly.express as px
-import marko
-from bs4 import BeautifulSoup
+
 
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
@@ -15,8 +14,7 @@ from dash_extensions import Download
 from dash_extensions.snippets import send_bytes
 
 import db_connection
-from app import app,cache, dbc_table_to_pandas,crear_elemento_visual
-from .layouts_predefinidos import elementos 
+from app import app,cache, dbc_table_to_pandas,crear_elemento_visual, export_excel_func
 
 
 ################################
@@ -24,6 +22,7 @@ from .layouts_predefinidos import elementos
 ################################
 
 calidad_grupos = """select CONCAT('[',grupo,'](', '/',%s,'-detalle-grupo?grupo=',grupo,'#',%s,')' ) as "grupo", 
+grupo as "nombre grupo",
 min(fecha_siembra) as "fecha inicio siembra",
 SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) as numero_bloques,
 SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) - SUM(CASE WHEN finduccion IS NOT NULL THEN 1 ELSE 0 END) as bloques_por_forzar,
@@ -41,7 +40,7 @@ calidad_aplicaciones_mensual = """
             clasificacion,
             total
         FROM  calidad_aplicaciones_mensual
-        WHERE etapa = %s and categoria = %s
+        WHERE etapa = %s and categoria = %s AND EXTRACT(YEAR FROM mes) =%s
         """
 
 #################
@@ -57,13 +56,6 @@ dicc_categoria = {"nutricion":"nutricion",
 "hormonas":"hormonas"}
 
 current_year = datetime.date.today().year
-year_input = crear_elemento_visual(tipo="slider",element_id="comparar-grupos-year-slider",
-params={"label":"Año de siembra","min":2014,"max":2021,"value":[2014, current_year],
-"marks":{ i:str(i) for i in range(2014,current_year+1)}, "sublabel":"Seleccione un rango de años"})
-
-month_input = crear_elemento_visual(tipo="slider",element_id="comparar-grupos-month-slider",
-params={"label":"Mes de siembra","min":1,"max":12,"value":[1,12],
-"marks":{ i:str(i) for i in range(1,13)}, "sublabel":"Seleccione un rango de mes"})
 
 checklist_estado_forza = crear_elemento_visual(tipo="checklist",element_id="estado-forza-grupos-checklist",
 params={"label":"Estado de forzamiento","options":[
@@ -81,18 +73,6 @@ def label_aplicaciones (i):
         return str(i)
 
 
-aplicaciones_tardias_input = crear_elemento_visual(tipo="vertical-slider",element_id="comparar-grupos-tardias-slider",
-params={"label":"máximo número de aplicaciones tardías","min":0,"max":5,"value":[0,5],
-"marks":{ i:label_aplicaciones(i) for i in range(0,6)}})
-
-aplicaciones_adelantadas_input = crear_elemento_visual(tipo="vertical-slider",element_id="comparar-grupos-adelantadas-slider",
-params={"label":"máximo número de aplicaciones adelantadas","min":0,"max":5,"value":[0,5],
-"marks":{ i:label_aplicaciones(i) for i in range(0,6)}})
-
-aplicaciones_pendientes_input = crear_elemento_visual(tipo="vertical-slider",element_id="comparar-grupos-pendientes-slider",
-params={"label":"máximo número de aplicaciones pendientes","min":-1,"max":5,"value":[-1,5],
-"marks":{ i:label_aplicaciones(i) for i in range(-1,6)}})
-
 
 boton_aplicar_filtros = dbc.FormGroup(
     [
@@ -104,29 +84,68 @@ boton_aplicar_filtros = dbc.FormGroup(
     ],
     row=True,
 )
-
-form_sliders = dbc.Form([year_input, month_input])
-
 form_checboxes =dbc.Row(
     [
-        dbc.Col(checklist_estado_forza),
-        dbc.Col(aplicaciones_tardias_input),
-        dbc.Col(aplicaciones_adelantadas_input),
-        dbc.Col(aplicaciones_pendientes_input)
+        dbc.Col(checklist_estado_forza)
     ],
     form=True
 )
 
 form_boton = dbc.Form([boton_aplicar_filtros])
 #Inicializo el layout
+graficas_calidad = html.Div([
+    html.Div([
 
-layout = html.Div([
-    form_sliders,form_checboxes,html.H5("", id="h3-dias-objetivo"),
+        html.Div([
+            dcc.Dropdown(
+                id='crossfilter-xaxis-column',
+                options=[{'label': i, 'value': i} for i in list(range(2014,2022))],
+                value=2021
+            ),
+            dcc.RadioItems(
+                id='crossfilter-xaxis-type',
+                options=[{'label': i, 'value': i} for i in ['absoluto', 'porcentual']],
+                value='absoluto',
+                labelStyle={'display': 'inline-block', 'marginTop': '5px'}
+            )
+        ],
+        style={'width': '49%', 'display': 'inline-block'}),
+
+        html.Div([
+            dcc.Dropdown(
+                id='crossfilter-yaxis-column',
+                options=[{'label': i, 'value': i} for i in list(range(2014,2022))],
+                value=2021
+            ),
+            dcc.RadioItems(
+                id='crossfilter-yaxis-type',
+                options=[{'label': i, 'value': i} for i in ['tardías', 'adelantadas','pendientes']],
+                value="tardías",
+                labelStyle={'display': 'inline-block', 'marginTop': '5px'}
+            )
+        ], style={'width': '49%', 'float': 'right', 'display': 'inline-block'})
+    ], style={
+        'padding': '10px 5px'
+    }),
+
+    html.Div([
+        dcc.Graph(
+            id='calidad-aplicaciones-mensual-graph'
+        )
+    ], style={'width': '49%', 'display': 'inline-block', 'padding': '0 20'}),
+    html.Div([
+        dcc.Graph(id='calidad-aplicaciones-por-grupo-graph')
+    ], style={'display': 'inline-block', 'width': '49%'})
+])
+
+
+layout = html.Div([form_checboxes,html.H5("", id="h3-dias-objetivo"),
 html.H5("", id="h3-rango-inferior"),
 html.H5("", id="h3-rango-superior"),
  form_boton,
- html.H1("Calidad de aplicaciones por mes"),
-    crear_elemento_visual(tipo="graph",element_id="calidad-aplicaciones-mensual-graph"),
+ html.H1("Calidad de aplicaciones"),
+ graficas_calidad,
+    #crear_elemento_visual(tipo="graph",element_id="calidad-aplicaciones-mensual-graph"),
 html.H1("Calidad de aplicaciones por grupos"),
         dbc.Col(
             dbc.Button("Exportar a Excel",id="exportar-comparacion-btn", color="success", className="mr-1"),
@@ -144,26 +163,64 @@ html.H1("Calidad de aplicaciones por grupos"),
 
 
 @cache.memoize()
-def query_para_grafica(etapa, categoria):
+def consulta_grafica_por_fecha(etapa,categoria_query,year):
+    return  db_connection.query(calidad_aplicaciones_mensual, [dicc_etapa[etapa],categoria_query,year])
+
+
+def query_para_grafica(etapa, categoria,escala,year):
 
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
         print("hay un error en etapa o categoria", etapa, categoria)
         return px.scatter()
 
     categoria_query = dicc_categoria[categoria]
-    consulta = db_connection.query(calidad_aplicaciones_mensual, [dicc_etapa[etapa],categoria_query])
-
+    consulta =consulta_grafica_por_fecha(etapa,categoria_query,year)
     if consulta.empty:
         print("consulta vacía")
         return px.scatter()
 
 
-    fig = px.histogram(consulta, x="mes", y="total",color="clasificacion", histfunc='sum')
+    fig = px.histogram(consulta, x="mes", y="total",color="clasificacion",
+    color_discrete_map={ # replaces default color mapping by value
+                "adelantada":"red",
+                "en el rango": "green",
+                "atrasada":"orange",
+                "muy atrasada": "red",
+               },
+    category_orders  ={ "clasificacion": ["adelantada","en el rango","atrasada","muy atrasada"]} ,
+    labels={ # replaces default labels by column name
+                "total": "total aplicaciones", "mes": "mes de aplicación"
+            },
+               
+    barnorm="percent" if escala=="porcentual" else None,
+    title = "por fecha de aplicación"
+
+               
+               )
+
+    return fig
+
+def query_para_grafica_por_grupo(df,indicador):
+
+    if df.empty:
+        print("consulta vacía")
+        return px.scatter()
+    homologacion_indicador = {"tardías":"Número de aplicaciones tardías",
+        "adelantadas":"Número de aplicaciones adelantadas",
+        "pendientes":"Número de aplicaciones pendientes"}
+
+    fig = px.histogram(df, x="nombre grupo",
+    y= homologacion_indicador[indicador],
+    histfunc='max',
+    title = "por grupo"
+
+               
+               )
 
     return fig
 
 @cache.memoize()
-def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelantadas,pendientes):
+def query_para_tabla(etapa, categoria,estado_forza):
 
     if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
         print("hay un error en etapa o categoria", etapa, categoria)
@@ -194,54 +251,6 @@ def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelanta
     
     consulta["fecha inicio siembra"]= pd.to_datetime(consulta["fecha inicio siembra"]).dt.date
 
-    consulta = consulta[(consulta['fecha inicio siembra']>=datetime.date(years[0],months[0],1)) & (consulta['fecha inicio siembra']<datetime.date(years[1],months[1],1) + relativedelta(months=1))]
-
-    #Filtros por calidad
-
-    lim_sup_tardias = tardias[1]
-    lim_sup_adelantadas = adelantadas[1]
-    lim_inf_pendientes = pendientes[0]
-    lim_sup_pendientes = pendientes[1]
-
-    if lim_sup_tardias ==5:
-        consulta = consulta[consulta['max_aplicaciones_tardias']>=tardias[0]]
-    else: 
-        consulta = consulta[(consulta['max_aplicaciones_tardias']>=tardias[0])&(consulta['max_aplicaciones_tardias']<=tardias[1])]
-
-    if lim_sup_adelantadas ==5:
-        consulta = consulta[consulta['max_aplicaciones_adelantadas']>=tardias[0]]
-    else: 
-        consulta = consulta[(consulta['max_aplicaciones_adelantadas']>=tardias[0])&(consulta['max_aplicaciones_adelantadas']<=tardias[1])]
-
-    if lim_inf_pendientes ==-1 and lim_sup_pendientes==5:
-        consulta = consulta.copy()
-    elif lim_inf_pendientes ==-1:
-        consulta = consulta[consulta['max_aplicaciones_pendientes']<=pendientes[1]]
-    elif lim_sup_pendientes ==-5:
-        consulta = consulta[consulta['max_aplicaciones_pendientes']>=pendientes[0]]
-    else:
-        consulta = consulta[(consulta['max_aplicaciones_pendientes']>=pendientes[0])&(consulta['max_aplicaciones_pendientes']<=pendientes[1])]
-
-    table_header = [html.Thead(html.Tr([ html.Th(col) for col in consulta.columns]))]
-
-    rows = []
-    for row in consulta.itertuples(index=False):
-        #Aquí debo poner la lógica los anchor para el vínculo que me lleve al grupo correspondiente
-        dict_tuple = row._asdict()
-        new_row=[]
-        for k,v in dict_tuple.items():
-            if v ==None:
-                new_row.append(html.Td(v))
-            elif k =="grupo":
-                new_row.append(html.Td(dcc.Link(v,href=f"/{etapa}-detalle-grupo?grupo={v}#{categoria}") ))
-            else:
-                new_row.append(html.Td(v))
-        
-        rows.append(html.Tr(new_row))
-    
-    table_body = [html.Tbody(rows)]
-    table = dbc.Table(table_header + table_body, bordered=True)
-
     return consulta
 
 ##############################
@@ -252,15 +261,19 @@ def query_para_tabla(etapa, categoria,years,months,estado_forza,tardias,adelanta
 @app.callback([Output("comparar-grupos-table", "data"),Output('comparar-grupos-table', 'columns'),
 Output("h3-dias-objetivo", "children"),
 Output("h3-rango-inferior", "children"),Output("h3-rango-superior", "children"),
-Output("calidad-aplicaciones-mensual-graph", "figure")],
+Output("calidad-aplicaciones-mensual-graph", "figure"),
+Output("calidad-aplicaciones-por-grupo-graph", "figure")],
 [Input('pathname-intermedio','children'),
-Input("filtrar-grupos-btn", "n_clicks")],[State("url","pathname"),
-State("url","hash"), State('comparar-grupos-year-slider',"value"),
-State('comparar-grupos-month-slider',"value"),State('estado-forza-grupos-checklist','value'),
-State('comparar-grupos-tardias-slider',"value"),State('comparar-grupos-adelantadas-slider',"value"),
-State('comparar-grupos-pendientes-slider',"value")])
+Input("filtrar-grupos-btn", "n_clicks"),
+Input("crossfilter-xaxis-type", "value"),
+Input('crossfilter-xaxis-column', "value"),
+Input("crossfilter-yaxis-type", "value"),
+Input('crossfilter-yaxis-column', "value")],
+[State("url","pathname"),
+State("url","hash"),State('estado-forza-grupos-checklist','value'),
+])
 
-def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,adelantadas,pendientes):
+def actualizar_select_bloque(path,n,escala,year,indicador, year_grupo,url,hash,estado_forza):
 
     if path =='comparar-grupos':
 
@@ -277,18 +290,27 @@ def actualizar_select_bloque(path,n,url,hash,years,months,estado_forza,tardias,a
         etapa = url.split("-")[0][1:]
         categoria = hash[1:]
         #Gráfica
-        histograma = query_para_grafica(etapa,categoria)
+        histograma = query_para_grafica(etapa,categoria,escala,year)
         #Tabla
         nueva_consulta = db_connection.query("""SELECT dias_entre_aplicaciones, tolerancia_rango_inferior, tolerancia_rango_superior FROM rangos_calidad_aplicaciones
     WHERE etapa=%s and categoria = %s""",[dicc_homologacion[etapa],dicc_homologacion[categoria] ])
 
-        df = query_para_tabla(etapa,categoria,years,months,estado_forza,tardias,adelantadas,pendientes)
+        df = query_para_tabla(etapa,categoria,estado_forza)
         dias_objetivo = f"* días entre aplicaciones: {nueva_consulta.iat[0,0]}"
         limite_inferior = f"* límite inferior de tolerancia : {nueva_consulta.iat[0,1]}"
         limite_superior = f"* límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
+        #gráfica por grupos
         
-        return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],dias_objetivo ,limite_inferior , limite_superior,histograma
+        grupos_consultados = df[(pd.to_datetime(df['fecha inicio siembra']).dt.year == year_grupo)].copy()
+        grupos_consultados.rename(columns={"max_aplicaciones_tardias":"Número de aplicaciones tardías",
+        "max_aplicaciones_adelantadas":"Número de aplicaciones adelantadas",
+        "max_aplicaciones_pendientes":"Número de aplicaciones pendientes"},inplace=True)
+        grafica_por_grupo = query_para_grafica_por_grupo(grupos_consultados,indicador)
+
+        return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],dias_objetivo ,limite_inferior , limite_superior,histograma,grafica_por_grupo
     return None,None, "","","", px.scatter()
+
+
 
 @app.callback(
 Output("download-comparacion", "data"),
@@ -296,15 +318,4 @@ Output("download-comparacion", "data"),
 [State("comparar-grupos-table", "data")])
 def download_as_csv(n_clicks, table_data):
 
-    if (not n_clicks) or (table_data is None):
-      raise PreventUpdate
-
-    df = pd.DataFrame.from_dict(table_data)
-    df["grupo"] = df["grupo"].apply(lambda x: ''.join(BeautifulSoup(marko.convert(x)).findAll(text=True)))
-    df["fecha inicio siembra"] = df["fecha inicio siembra"].apply(lambda x: ''.join(BeautifulSoup(marko.convert(x)).findAll(text=True)))
-    def to_xlsx(bytes_io):
-        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
-        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
-        xslx_writer.save()
-
-    return send_bytes(to_xlsx, "comparacion_grupos.xlsx")
+    return export_excel_func(n_clicks, table_data, "comparacion_grupos.xlsx")

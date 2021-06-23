@@ -15,16 +15,21 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
 import numpy as np
-from app import app,cache, dbc_table_to_pandas
+
+from app import app,cache, dbc_table_to_pandas, crear_elemento_visual, export_excel_func
 from .layouts_predefinidos import elementos 
 from preprocesar_base import aplicar_pipeline
 from consulta_db_para_estimacion import consulta_modelo_v1
 
-##############
-# modelos #####
-##############
+####################
+# modelos ##########
+####################
 pc_model = load_model('lr_pc_19Ene2020')
 sc_model = load_model('cb_sc_21Ene2020')
+
+################################
+# Consultas ####################
+################################
 
 consulta = """
 WITH pesos as (
@@ -69,6 +74,51 @@ on t1.blocknumber = t2.blocknumber
 WHERE rn=1 AND ((edad_actual >10 AND desarrollo='PC') OR (peso_planta >2500 AND desarrollo='PC') OR (edad_actual >3 AND desarrollo='SC'))
 ORDER BY edad_actual desc
 """ 
+
+
+#################
+# Layout ########
+#################
+
+bloque_dropdown = dcc.Dropdown(
+        id='bloque-peso-forza-dropdown'
+    )
+peso_forza_graph = crear_elemento_visual(tipo="graph",element_id="peso-forza-graph")
+
+df_pesos = pd.DataFrame(
+    {
+        "Semanas adicionales": [],
+        "peso forza proyectado": [],
+    }
+)
+
+peso_forza_sensibilidad_table =  crear_elemento_visual(tipo="dash_table",element_id="sensibilidad-peso-forza-table")
+
+div_sensibilidad= html.Div([
+    bloque_dropdown,
+    dbc.Row(            [
+                dbc.Col(peso_forza_graph),
+                dbc.Col(peso_forza_sensibilidad_table)
+                
+            ]
+        ),
+        ]
+    )
+
+
+exportar_a_excel_input = crear_elemento_visual(tipo="export-excel",element_id='exportar-forzamiento-excel-btn',
+params={"download_id":"download-forzamiento"})
+
+layout = html.Div([
+    div_sensibilidad,
+    exportar_a_excel_input,
+    crear_elemento_visual(tipo="dash_table",element_id='bloques-por-forzar-table')
+    ])
+
+##############################
+# Funciones  #################
+##############################
+
 @cache.memoize()
 def generar_lista_bloques_forzamiento():
     return db_connection.query(consulta)
@@ -127,75 +177,28 @@ def query_para_grafica(df,bloque):
     )
 )
     return fig
-###############
-#Layout
-##############
 
 
-bloque_dropdown = dcc.Dropdown(
-        id='bloque-peso-forza-dropdown'
-    )
-peso_forza_graph = dcc.Graph(config={
-        'displayModeBar': True},id="peso-forza-graph")
-
-
-df_pesos = pd.DataFrame(
-    {
-        "Semanas adicionales": [],
-        "peso forza proyectado": [],
-    }
-)
-
-peso_forza_sensibilidad_table =  dash_table.DataTable(
-        id='sensibilidad-peso-forza-table',
-        columns=[{"name": "Semanas adicionales", "id": "Semanas adicionales", "editable": False},
-        {"name": "peso forza proyectado", "id": "peso forza proyectado", "editable": True},],
-        data=df_pesos.to_dict('records')
-    )
-
-div_sensibilidad= html.Div([
-    bloque_dropdown,
-    dbc.Row(            [
-                dbc.Col(peso_forza_graph),
-                dbc.Col(peso_forza_sensibilidad_table)
-                
-            ]
-        ),
-        ]
-    )
-
-
-exportar_a_excel_input = dbc.FormGroup(
-    [
-        dbc.Button("Exportar a Excel",id="exportar-forzamiento-excel-btn", color="success", className="mr-1"),
-        Download(id="download-forzamiento")
-    ]
-)
-form_programacion = dbc.Form([exportar_a_excel_input])
-
-layout = elementos.DashLayout(extra_elements=[div_sensibilidad,form_programacion])
-
-layout.crear_elemento(tipo="table",element_id="bloques-por-forzar-table",  label="Bloques por forzar")
-layout.ordenar_elementos(["bloques-por-forzar-table"])
-
-
-###################
-##### Callbacks ###
-###################
+##############################
+# Callbacks  #################
+##############################
 
 
 #Actualizar alertas y dropdown
-@app.callback([Output("bloques-por-forzar-table", "children"),Output('bloque-peso-forza-dropdown', "options")], [Input('pathname-intermedio','children')])
+@app.callback([Output("bloques-por-forzar-table", "data"),Output('bloques-por-forzar-table', 'columns'),
+Output('bloque-peso-forza-dropdown', "options")], [Input('pathname-intermedio','children')])
 def actualizar_select_bloque(path):
     if path =='listado-forzamiento':
         data = generar_lista_bloques_forzamiento().round(2)
         opciones = [{"label":row["bloque"],"value":row["bloque"]} for _,row in data[["bloque","desarrollo"]].iterrows()]
-        return dbc.Table.from_dataframe(data).children, opciones
+        return data.to_dict('records'), [{"name": i, "id": i} for i in data.columns], opciones
 
     return None
 
 #Actualizar tabla de entrada
-@app.callback(Output("sensibilidad-peso-forza-table", "data"), [Input('bloque-peso-forza-dropdown','value')])
+@app.callback(Output("sensibilidad-peso-forza-table", "data"),Output('sensibilidad-peso-forza-table', 'columns'),
+ [Input('bloque-peso-forza-dropdown','value')])
+
 def actualizar_select_bloque(bloque):
     if bloque is None:
         raise PreventUpdate
@@ -209,7 +212,8 @@ def actualizar_select_bloque(bloque):
         peso_actual+400,peso_actual+600,peso_actual+800],
     })
 
-    return df_pesos.to_dict('records')
+    return df_pesos.to_dict('records'), [{"name": "Semanas adicionales", "id": "Semanas adicionales", "editable": False},
+        {"name": "peso forza proyectado", "id": "peso forza proyectado", "editable": True},]
 
 
 #Actualizar gráfica con cambios en la tabla
@@ -233,15 +237,6 @@ def display_output(rows, columns,bloque):
 @app.callback(
 Output("download-forzamiento", "data"),
 [Input("exportar-forzamiento-excel-btn", "n_clicks")],
-[State("bloques-por-forzar-table", "children")])
+[State("bloques-por-forzar-table", "data")])
 def download_as_csv(n_clicks, table_data):
-    if (not n_clicks) or (table_data is None):
-      raise PreventUpdate
-
-    df = dbc_table_to_pandas(table_data)
-    def to_xlsx(bytes_io):
-        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
-        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
-        xslx_writer.save()
-
-    return send_bytes(to_xlsx, "bloques_por_forzar.xlsx")
+    return export_excel_func(n_clicks, table_data, "bloques_por_forzar.xlsx")

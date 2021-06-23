@@ -2,18 +2,12 @@ import pandas as pd
 import datetime
 from dateutil.relativedelta import relativedelta
 
-import dash_core_components as dcc
-import dash_bootstrap_components as dbc
+
 import dash_html_components as html
 from dash.dependencies import Input, Output, State
-from dash_extensions import Download
-from dash_extensions.snippets import send_bytes
-from dash.exceptions import PreventUpdate
 
 import db_connection
-from app import app,cache, dbc_table_to_pandas, crear_elemento_visual
-
-from .layouts_predefinidos import elementos 
+from app import app,cache, crear_elemento_visual, export_excel_func
 
 ################################
 # Consultas ####################
@@ -60,20 +54,14 @@ ORDER BY fecha,formula
 # Layout ########
 #################
 
-exportar_a_excel_input = dbc.FormGroup(
-    [
-        dbc.Button("Exportar a Excel",id="exportar-programacion-excel-btn", color="success", className="mr-1"),
-        Download(id="download-programacion")
-    ]
-)
-
 layout = html.Div([
     crear_elemento_visual(tipo="dbc_select",element_id="select-year-programacion-aplicaciones",params={"label":"Seleccione el año"}),
     crear_elemento_visual(tipo="number-input",element_id="input-week-programacion-aplicaciones",
     params={"label":"Ingrese el número de la semana","min":1,"max":53}),
-    exportar_a_excel_input,
+    crear_elemento_visual(tipo="export-excel",element_id='exportar-programacion-excel-btn',params={"download_id":"download-programacion"}),
     crear_elemento_visual(tipo="dash_table",element_id='programacion-aplicaciones-table')
     ])
+
 ##############################
 # Funciones  #################
 ##############################
@@ -129,18 +117,8 @@ Output("download-programacion", "data"),
 [Input("exportar-programacion-excel-btn", "n_clicks")],
 [State("programacion-aplicaciones-table", "data")])
 def download_as_csv(n_clicks, table_data):
-    if (not n_clicks) or (table_data is None):
-      raise PreventUpdate
-      
-    df = pd.DataFrame.from_dict(table_data)
-    # download_buffer = io.StringIO()
-    # df.to_csv(download_buffer, index=False)
-    # download_buffer.seek(0)
-    # return dict(content=download_buffer.getvalue(), filename="tabla_comparacion.csv")
 
-    def to_xlsx(bytes_io):
-        xslx_writer = pd.ExcelWriter(bytes_io, engine="xlsxwriter")
-        df.to_excel(xslx_writer, index=False, sheet_name="sheet1")
-        xslx_writer.save()
+    return export_excel_func(n_clicks, table_data, "programacion_aplicaciones.xlsx")
+    
 
-    return send_bytes(to_xlsx, "programacion_aplicaciones.xlsx")
+     
