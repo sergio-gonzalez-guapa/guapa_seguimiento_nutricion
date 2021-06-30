@@ -3,7 +3,7 @@ import datetime
 import io
 from dateutil.relativedelta import relativedelta
 import plotly.express as px
-
+import plotly.graph_objects as go
 
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
@@ -36,24 +36,31 @@ group by(grupo)
 order by 2"""
 
 calidad_aplicaciones_mensual = """ 
-    SELECT mes,
-            clasificacion,
-            total
-        FROM  calidad_aplicaciones_mensual
-        WHERE etapa = %s and categoria = %s AND EXTRACT(YEAR FROM mes) =%s
+    SELECT grupo,
+            date_trunc('month', fecha) as mes,
+            1 as conteo,
+            CASE WHEN calidad in (0,1) THEN 'adelantada'
+                WHEN calidad =2 THEN 'en el rango'
+                WHEN calidad in (3,4) THEN 'tardía'
+                ELSE 'validar'
+                END AS calidad
+
+        FROM  aplicaciones
+        WHERE etapa2 = %s and categoria = %s AND EXTRACT(YEAR FROM fecha) =%s
         """
 
+aplicaciones_pendientes_mensual = """ 
+    SELECT grupo,
+            date_trunc('month', fecha) as mes,
+            1 as conteo,
+            'pendiente' AS calidad
+
+        FROM  aplicaciones_pendientes
+        WHERE etapa2 = %s and categoria = %s AND EXTRACT(YEAR FROM fecha) =%s
+        """
 #################
 # Layout ########
 #################
-
-dicc_etapa = {"preforza":"Post Siembra",
-"postforza":"Post Forza",
-"semillero":"Post Deshija"}
-
-dicc_categoria = {"nutricion":"nutricion",
-"fungicidas":"proteccion","herbicidas":"herbicida" ,
-"hormonas":"hormonas"}
 
 current_year = datetime.date.today().year
 
@@ -164,39 +171,48 @@ html.H1("Calidad de aplicaciones por grupos"),
 
 @cache.memoize()
 def consulta_grafica_por_fecha(etapa,categoria_query,year):
-    return  db_connection.query(calidad_aplicaciones_mensual, [dicc_etapa[etapa],categoria_query,year])
+    return  db_connection.query(calidad_aplicaciones_mensual, [etapa,categoria_query,year])
 
+@cache.memoize()
+def consulta_grafica_pendientes_por_fecha(etapa,categoria_query,year):
+    return  db_connection.query(aplicaciones_pendientes_mensual, [etapa,categoria_query,year])
 
 def query_para_grafica(etapa, categoria,escala,year):
 
-    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
-        print("hay un error en etapa o categoria", etapa, categoria)
-        return px.scatter()
-
-    categoria_query = dicc_categoria[categoria]
-    consulta =consulta_grafica_por_fecha(etapa,categoria_query,year)
+    consulta =consulta_grafica_por_fecha(etapa,categoria,year)
+    consulta_pendientes = consulta_grafica_pendientes_por_fecha(etapa,categoria,year)
+    consulta = consulta.append(consulta_pendientes)
+    
     if consulta.empty:
         print("consulta vacía")
         return px.scatter()
 
-
-    fig = px.histogram(consulta, x="mes", y="total",color="clasificacion",
+    consulta_agrupada = consulta.groupby(["mes","grupo","calidad"])["conteo"].sum().reset_index()
+    fig = px.scatter()
+    if escala=="porcentual":
+        fig = px.histogram(consulta_agrupada, x="mes", y="conteo",color="calidad",
     color_discrete_map={ # replaces default color mapping by value
-                "adelantada":"red",
+                "adelantada":"purple",
                 "en el rango": "green",
-                "atrasada":"orange",
-                "muy atrasada": "red",
+                "tardía":"red"
                },
-    category_orders  ={ "clasificacion": ["adelantada","en el rango","atrasada","muy atrasada"]} ,
+    category_orders  ={ "calidad": ["adelantada","en el rango","tardía"]} ,
     labels={ # replaces default labels by column name
                 "total": "total aplicaciones", "mes": "mes de aplicación"
-            },
-               
-    barnorm="percent" if escala=="porcentual" else None,
-    title = "por fecha de aplicación"
+            },     
 
-               
-               )
+    barnorm="percent",
+    title = "por fecha de aplicación")
+
+    else: 
+        fig = px.bar(consulta_agrupada, x="mes", y="conteo",color="calidad",hover_data=["grupo"],
+        color_discrete_map={ # replaces default color mapping by value
+        "adelantada":"purple",
+        "en el rango": "green",
+        "tardía":"red"
+        },
+        category_orders  ={ "calidad": ["adelantada","en el rango","tardía"]} ,
+        title = "por fecha de aplicación")
 
     return fig
 
@@ -222,13 +238,7 @@ def query_para_grafica_por_grupo(df,indicador):
 @cache.memoize()
 def query_para_tabla(etapa, categoria,estado_forza):
 
-    if (etapa not in dicc_etapa) or (categoria not in dicc_categoria):
-        print("hay un error en etapa o categoria", etapa, categoria)
-        return None
-    
-    categoria_query = dicc_categoria[categoria]
-    
-    consulta = db_connection.query(calidad_grupos, [etapa,categoria_query,etapa,categoria_query])
+    consulta = db_connection.query(calidad_grupos, [etapa,categoria,etapa,categoria])
 
     #Filtrar por estado de forza
     if estado_forza is not None:

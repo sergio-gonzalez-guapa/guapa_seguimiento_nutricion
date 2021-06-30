@@ -70,8 +70,8 @@ fecha_siembra as "fecha de siembra",
 finduccion as "fecha de inducción",
 aplicaciones_esperadas - num_aplicaciones_realizadas as "# de aplicaciones pendientes (programadas - realizadas)",
 num_aplicaciones_realizadas as "# de aplicaciones realizadas",
-aplicaciones_con_retraso as "# de aplicaciones realizadas con retraso",
-aplicaciones_muy_proximas as "# de aplicaciones realizadas anticipadamente"
+aplicaciones_con_retraso as "# de aplicaciones realizadas tardías",
+aplicaciones_muy_proximas as "# de aplicaciones realizadas adelantadas"
 FROM calidad_aplicaciones
 WHERE grupo=%s and categoria = %s'''
 

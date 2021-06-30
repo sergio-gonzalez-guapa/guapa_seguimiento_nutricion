@@ -21,29 +21,50 @@ concat(desarrollo,blocknumber)  as value
  from blocks_desarrollo
  order by fecha_siembra'''
 
-
 aplicaciones_bloque = '''SELECT blocknumber,
 codigo_cedula as "codigo cédula",
 fecha,
 descripcion_formula as formula,
 motivo,
-DATE_PART('day',dias_diferencia) as "dias desde la aplicación anterior"
-from aplicaciones
+dias_diferencia as "dias desde la aplicación anterior",
+CASE 
+    WHEN    calidad in (0,1) THEN 'adelantada'
+    WHEN    calidad in (3,4) THEN 'tardía'
+    ELSE 'en el rango'
+    END AS color,
+CASE 
+    WHEN    calidad in (0,1) THEN 1
+    WHEN    calidad in (3,4) THEN 3
+    ELSE 2
+    END AS calificacion
+
+from aplicaciones 
 WHERE bloque =%s AND etapa2 = %s AND categoria = %s
 ORDER BY fecha'''
 
-rangos_calidad_aplicaciones = '''
-SELECT * FROM 
-rangos_calidad_aplicaciones
-WHERE etapa = %s 
-AND
-categoria=%s
-
-'''
+aplicaciones_pendientes_bloque = '''SELECT bloque,
+fecha,
+categoria,
+etapa,
+etapa2,
+-1 as calificacion,
+'faltante' as color,
+'pendiente' as formula
+from aplicaciones_pendientes
+WHERE bloque =%s AND etapa2 = %s AND categoria = %s
+ORDER BY fecha'''
 
 peso_planta_bloque = '''SELECT *
 from pesoplanta where llave =%s '''
 
+fechas_bloque = """
+select fecha_siembra,
+ finduccion,
+ mediana_fecha_cosecha 
+ from blocks_desarrollo
+ WHERE bloque=%s
+
+"""
 #################
 # Layout ########
 #################
@@ -72,36 +93,74 @@ def query_para_select():
 
 #Señalización por colores de aplicaciones de acuerdo con rangos
 @cache.memoize()
-def query_para_grafica(tabla_aplicaciones, etapa_query, categoria_query):
+def query_para_grafica(bloque,etapa,categoria,tabla_aplicaciones):
 
     if tabla_aplicaciones.empty:
         return px.scatter()
     
-    consulta = db_connection.query(rangos_calidad_aplicaciones,[etapa_query,categoria_query]).to_dict(orient='list')
-    rango_inferior = consulta["tolerancia_rango_inferior"][0]
-    rango_superior = consulta["tolerancia_rango_superior"][0]
-
-    #Temporalmente se asume que la primera aplicación se hace a tiempo, caso x==None
     #Hago copia para no afectar tabla referenciada en tabla_aplicaciones
     df = tabla_aplicaciones.copy()
+    apls_pendientes= db_connection.query(aplicaciones_pendientes_bloque, [bloque,etapa,categoria])
 
-    df["calificacion"]= df["dias desde la aplicación anterior"].apply(lambda x: 2 if x is None else 2 if math.isnan(x) else 1 if x<rango_inferior else 2 if x<rango_superior else 3)
-    dicc_calificacion = {1:"debajo del rango",
-    2:"en el rango",
-    3:"encima del rango"}
+    if apls_pendientes.empty==False:
+        apls_pendientes["fecha_str"]=apls_pendientes["fecha"].dt.strftime('%d-%B-%Y')
 
-    df["color"]= df["calificacion"].apply(lambda x: dicc_calificacion[x])
-
+    df = df.append(apls_pendientes)
     fig = px.scatter(df, x="fecha", y="calificacion",color="color",
     hover_data=["fecha_str","formula"], color_discrete_map={ # replaces default color mapping by value
-                dicc_calificacion[1]: "purple",
-                dicc_calificacion[2]: "green",
-                dicc_calificacion[3]: "red"
+                "adelantada": "purple",
+                "en el rango": "green",
+                "tardía": "red"
 
             })
+
+
+    consulta= db_connection.query(fechas_bloque, [bloque])
+    fecha_siembra = consulta.iloc[0]["fecha_siembra"]
+    finduccion = consulta.iloc[0]["finduccion"]
+    fecha_cosecha = consulta.iloc[0]["mediana_fecha_cosecha"]
+
+    #Aplicaciones pendientes
+
+    
+
+    if etapa=='preforza':
+
+        if fecha_siembra is not None:
+            fig.add_vline(x=fecha_siembra, line_width=3, line_dash="dash", line_color="black")
+
+            fig.add_annotation(x=fecha_siembra, y=2.75,
+            text="siembra: " +fecha_siembra.strftime('%d-%B-%Y'),
+            showarrow=False)
+
+        if finduccion is not None:
+            fig.add_vline(x=finduccion, line_width=3, line_dash="dash", line_color="black")
+
+            fig.add_annotation(x=finduccion, y=2.75,
+            text="inducción: " +finduccion.strftime('%d-%B-%Y'),
+            showarrow=False)
+
+    if etapa=='postforza':
+
+        if finduccion is not None:
+            fig.add_vline(x=finduccion, line_width=3, line_dash="dash", line_color="black")
+
+            fig.add_annotation(x=finduccion, y=2.75,
+            text="inducción: " +finduccion.strftime('%d-%B-%Y'),
+            showarrow=False)
+
+        if fecha_cosecha is not None:
+
+            fig.add_vline(x=fecha_cosecha, line_width=3, line_dash="dash", line_color="black")
+            fig.add_annotation(x=fecha_cosecha, y=2.75,
+            text="cosecha: " +fecha_cosecha.strftime('%d-%B-%Y'),
+            showarrow=False)
+
+    
     fig.update_xaxes(
         dtick=1209600000,
         tickformat="Semana %U-%b\n%Y")
+    
     return fig
 
 @cache.memoize()
@@ -166,13 +225,12 @@ def actualizar_tabla(bloque, path, hash):
 
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]
-    etapa_query = dicc_etapa[etapa][bloque[0:2]]
 
     data = query_para_tabla(bloque,etapa,categoria)
     
-    fig_aplicaciones = query_para_grafica(data, etapa_query, categoria)
+    fig_aplicaciones = query_para_grafica(bloque,etapa,categoria,data)
     fig_peso_planta = query_para_grafica_peso_planta(bloque,categoria,etapa)
 
-    df = data.drop(["fecha"],axis=1)
+    df = data.drop(["fecha","color","calificacion"],axis=1).rename(columns={"fecha_str":"fecha"})
     return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns],fig_aplicaciones,fig_peso_planta
 
