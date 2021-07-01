@@ -21,6 +21,11 @@ from app import app,cache, dbc_table_to_pandas,crear_elemento_visual, export_exc
 # Consultas ####################
 ################################
 
+
+#######
+# Tengo que cruzar con la fecha del grupo
+#########
+
 calidad_grupos = """select CONCAT('[',grupo,'](', '/',%s,'-detalle-grupo?grupo=',grupo,'#',%s,')' ) as "grupo", 
 grupo as "nombre grupo",
 min(fecha_siembra) as "fecha inicio siembra",
@@ -227,17 +232,27 @@ def query_para_grafica_por_grupo(df,indicador):
     if df.empty:
         print("consulta vacía")
         return px.scatter()
-    homologacion_indicador = {"tardías":"Número de aplicaciones tardías",
-        "adelantadas":"Número de aplicaciones adelantadas",
-        "pendientes":"Número de aplicaciones pendientes"}
 
-    fig = px.histogram(df, x="nombre grupo",
-    y= homologacion_indicador[indicador],
-    histfunc='max',
-    title = "por grupo"
+    df_long = pd.melt(df, id_vars='nombre grupo', value_vars=["tardía",
+    'adelantada', 'pendiente'],
+    value_name='Número máximo de aplicaciones',
+    var_name="calidad")
 
-               
-               )
+    
+    fig = px.histogram(df_long, x="nombre grupo",y='Número máximo de aplicaciones',
+    color= "calidad",
+    title = "por grupo",
+    color_discrete_map={ # replaces default color mapping by value
+                "adelantada":"#E5BE01",
+                "en el rango": "green",
+                "tardía":"#FF8000",
+                "pendiente":"#C81D11"
+               },
+    category_orders  ={ "calidad": ["adelantada","en el rango","tardía"]},
+        labels={ # replaces default labels by column name
+                "Número máximo de aplicaciones": "total aplicaciones"
+            }
+    )
 
     return fig
 
@@ -337,9 +352,9 @@ def calidad_aplicaciones_por_grupo(data,indicador,year_grupo):
     df = pd.read_json(data, orient='split')
 
     grupos_consultados = df[(pd.to_datetime(df['fecha inicio siembra']).dt.year == year_grupo)].copy()
-    grupos_consultados.rename(columns={"max_aplicaciones_tardias":"Número de aplicaciones tardías",
-    "max_aplicaciones_adelantadas":"Número de aplicaciones adelantadas",
-    "max_aplicaciones_pendientes":"Número de aplicaciones pendientes"},inplace=True)
+    grupos_consultados.rename(columns={"max_aplicaciones_tardias":"tardía",
+    "max_aplicaciones_adelantadas":"adelantada",
+    "max_aplicaciones_pendientes":"pendiente"},inplace=True)
     grafica_por_grupo = query_para_grafica_por_grupo(grupos_consultados,indicador)
 
     return grafica_por_grupo
