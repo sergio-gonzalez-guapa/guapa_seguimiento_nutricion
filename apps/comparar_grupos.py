@@ -28,14 +28,14 @@ SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) as numero_bloques,
 SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) - SUM(CASE WHEN finduccion IS NOT NULL THEN 1 ELSE 0 END) as bloques_por_forzar,
 max(aplicaciones_con_retraso) as max_aplicaciones_tardias,
 max(aplicaciones_muy_proximas) as max_aplicaciones_adelantadas,
-max(aplicaciones_esperadas - num_aplicaciones_realizadas) as max_aplicaciones_pendientes
+max(aplicaciones_pendientes) as max_aplicaciones_pendientes
 
 from calidad_aplicaciones 
 WHERE etapa2 =%s and categoria=%s
 group by(grupo)
 order by 2"""
 
-calidad_aplicaciones_mensual = """ 
+calidad_aplicaciones_mensual2 = """ 
     SELECT grupo,
             date_trunc('month', fecha) as mes,
             1 as conteo,
@@ -146,12 +146,17 @@ graficas_calidad = html.Div([
 ])
 
 
-layout = html.Div([form_checboxes,html.H5("", id="h3-dias-objetivo"),
-html.H5("", id="h3-rango-inferior"),
+layout = html.Div([
+    html.H5("", id="comparar-grupos-etapa"),
+    html.H5("", id="comparar-grupos-categoria"),
+    html.H5("", id="h3-rango-inferior"),
 html.H5("", id="h3-rango-superior"),
- form_boton,
+#form_checboxes,
+html.H5("", id="h3-dias-objetivo"),
+ #form_boton,
  html.H1("Calidad de aplicaciones"),
  graficas_calidad,
+ dcc.Store(id='tabla-calidad-grupos'),
     #crear_elemento_visual(tipo="graph",element_id="calidad-aplicaciones-mensual-graph"),
 html.H1("Calidad de aplicaciones por grupos"),
         dbc.Col(
@@ -169,18 +174,17 @@ html.H1("Calidad de aplicaciones por grupos"),
 ##############################
 
 
-@cache.memoize()
+#@cache.memoize()
 def consulta_grafica_por_fecha(etapa,categoria_query,year):
-    return  db_connection.query(calidad_aplicaciones_mensual, [etapa,categoria_query,year])
+    return  db_connection.query(calidad_aplicaciones_mensual2, [str(etapa),str(categoria_query),year])
 
 @cache.memoize()
 def consulta_grafica_pendientes_por_fecha(etapa,categoria_query,year):
     return  db_connection.query(aplicaciones_pendientes_mensual, [etapa,categoria_query,year])
 
 def query_para_grafica(etapa, categoria,escala,year):
-
-    consulta =consulta_grafica_por_fecha(etapa,categoria,year)
     consulta_pendientes = consulta_grafica_pendientes_por_fecha(etapa,categoria,year)
+    consulta =consulta_grafica_por_fecha(etapa,categoria,year)
     consulta = consulta.append(consulta_pendientes)
     
     if consulta.empty:
@@ -192,9 +196,10 @@ def query_para_grafica(etapa, categoria,escala,year):
     if escala=="porcentual":
         fig = px.histogram(consulta_agrupada, x="mes", y="conteo",color="calidad",
     color_discrete_map={ # replaces default color mapping by value
-                "adelantada":"purple",
+                "adelantada":"#E5BE01",
                 "en el rango": "green",
-                "tardía":"red"
+                "tardía":"#FF8000",
+                "pendiente":"#C81D11"
                },
     category_orders  ={ "calidad": ["adelantada","en el rango","tardía"]} ,
     labels={ # replaces default labels by column name
@@ -207,9 +212,10 @@ def query_para_grafica(etapa, categoria,escala,year):
     else: 
         fig = px.bar(consulta_agrupada, x="mes", y="conteo",color="calidad",hover_data=["grupo"],
         color_discrete_map={ # replaces default color mapping by value
-        "adelantada":"purple",
-        "en el rango": "green",
-        "tardía":"red"
+                "adelantada":"#E5BE01",
+                "en el rango": "green",
+                "tardía":"#FF8000",
+                "pendiente":"#C81D11"
         },
         category_orders  ={ "calidad": ["adelantada","en el rango","tardía"]} ,
         title = "por fecha de aplicación")
@@ -236,30 +242,30 @@ def query_para_grafica_por_grupo(df,indicador):
     return fig
 
 @cache.memoize()
-def query_para_tabla(etapa, categoria,estado_forza):
+def query_para_tabla(etapa, categoria):
 
     consulta = db_connection.query(calidad_grupos, [etapa,categoria,etapa,categoria])
 
-    #Filtrar por estado de forza
-    if estado_forza is not None:
-        #Posibles valorses que puede tomar la lista: 1,3,5
-        suma = sum(estado_forza)
-        if suma==1:
-            consulta = consulta[consulta.bloques_por_forzar==0]
-        elif suma==3:
-            consulta = consulta[consulta.bloques_por_forzar==consulta.numero_bloques]
-        elif suma==4:
-            consulta = consulta[ (consulta.bloques_por_forzar==0) | (consulta.bloques_por_forzar==consulta.numero_bloques)]
-        elif suma==5:
-            consulta = consulta[ (consulta.bloques_por_forzar>0) & (consulta.bloques_por_forzar<consulta.numero_bloques)]
-        elif suma==6:
-            consulta = consulta[ consulta.bloques_por_forzar<consulta.numero_bloques]       
-        elif suma==8:
-            consulta = consulta[ consulta.bloques_por_forzar>0]   
-        else:
-            consulta = consulta.copy()
-    
-    consulta["fecha inicio siembra"]= pd.to_datetime(consulta["fecha inicio siembra"]).dt.date
+    # #Filtrar por estado de forza
+    # if estado_forza is not None:
+    #     #Posibles valorses que puede tomar la lista: 1,3,5
+    #     suma = sum(estado_forza)
+    #     if suma==1:
+    #         consulta = consulta[consulta.bloques_por_forzar==0]
+    #     elif suma==3:
+    #         consulta = consulta[consulta.bloques_por_forzar==consulta.numero_bloques]
+    #     elif suma==4:
+    #         consulta = consulta[ (consulta.bloques_por_forzar==0) | (consulta.bloques_por_forzar==consulta.numero_bloques)]
+    #     elif suma==5:
+    #         consulta = consulta[ (consulta.bloques_por_forzar>0) & (consulta.bloques_por_forzar<consulta.numero_bloques)]
+    #     elif suma==6:
+    #         consulta = consulta[ consulta.bloques_por_forzar<consulta.numero_bloques]       
+    #     elif suma==8:
+    #         consulta = consulta[ consulta.bloques_por_forzar>0]   
+    #     else:
+    #         consulta = consulta.copy()
+    if consulta.empty==False:
+        consulta["fecha inicio siembra"]= pd.to_datetime(consulta["fecha inicio siembra"]).dt.date
 
     return consulta
 
@@ -268,58 +274,75 @@ def query_para_tabla(etapa, categoria,estado_forza):
 ##############################
 
 
+
 @app.callback([Output("comparar-grupos-table", "data"),Output('comparar-grupos-table', 'columns'),
 Output("h3-dias-objetivo", "children"),
-Output("h3-rango-inferior", "children"),Output("h3-rango-superior", "children"),
-Output("calidad-aplicaciones-mensual-graph", "figure"),
-Output("calidad-aplicaciones-por-grupo-graph", "figure")],
-[Input('pathname-intermedio','children'),
-Input("filtrar-grupos-btn", "n_clicks"),
-Input("crossfilter-xaxis-type", "value"),
-Input('crossfilter-xaxis-column', "value"),
-Input("crossfilter-yaxis-type", "value"),
-Input('crossfilter-yaxis-column', "value")],
+Output("h3-rango-inferior", "children"),
+Output("h3-rango-superior", "children"),
+Output("comparar-grupos-etapa", "children"),
+Output("comparar-grupos-categoria", "children"),
+Output('tabla-calidad-grupos','data')],
+[Input('pathname-intermedio','children')
+],
 [State("url","pathname"),
-State("url","hash"),State('estado-forza-grupos-checklist','value'),
+State("url","hash")
 ])
 
-def actualizar_select_bloque(path,n,escala,year,indicador, year_grupo,url,hash,estado_forza):
+def actualizar_tabla_calidad_grupos(path,url,hash_url):
 
-    if path =='comparar-grupos':
-
-
-        dicc_homologacion = {"preforza":"Post Siembra",
-        "postforza":"Post Forza",
-        "semillero":"Post Poda",
-        "nutricion":"nutricion",
-        "herbicidas":"herbicida",
-        "proteccion":"proteccion",
-        "insecticidas":"insecticida"}
-
-        
+    if path !="comparar-grupos":
+        raise PreventUpdate
+    else:
         etapa = url.split("-")[0][1:]
-        categoria = hash[1:]
+        categoria = hash_url[1:]
         #Gráfica
-        histograma = query_para_grafica(etapa,categoria,escala,year)
+        
         #Tabla
         nueva_consulta = db_connection.query("""SELECT dias_entre_aplicaciones, tolerancia_rango_inferior, tolerancia_rango_superior FROM rangos_calidad_aplicaciones
-    WHERE etapa=%s and categoria = %s""",[dicc_homologacion[etapa],dicc_homologacion[categoria] ])
+    WHERE etapa2=%s and categoria = %s""",[etapa,categoria])
 
-        df = query_para_tabla(etapa,categoria,estado_forza)
-        dias_objetivo = f"* días entre aplicaciones: {nueva_consulta.iat[0,0]}"
-        limite_inferior = f"* límite inferior de tolerancia : {nueva_consulta.iat[0,1]}"
-        limite_superior = f"* límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
-        #gráfica por grupos
         
-        grupos_consultados = df[(pd.to_datetime(df['fecha inicio siembra']).dt.year == year_grupo)].copy()
-        grupos_consultados.rename(columns={"max_aplicaciones_tardias":"Número de aplicaciones tardías",
-        "max_aplicaciones_adelantadas":"Número de aplicaciones adelantadas",
-        "max_aplicaciones_pendientes":"Número de aplicaciones pendientes"},inplace=True)
-        grafica_por_grupo = query_para_grafica_por_grupo(grupos_consultados,indicador)
+        dias_objetivo = f"días entre aplicaciones: {nueva_consulta.iat[0,0]}"
+        limite_inferior = f"límite inferior de tolerancia : {nueva_consulta.iat[0,1]}"
+        limite_superior = f"límite superior de tolerancia : {nueva_consulta.iat[0,2]}"
+        
+        df = query_para_tabla(etapa,categoria)
+        df_as_json = df.to_json(date_format='iso', orient='split')
 
-        return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],dias_objetivo ,limite_inferior , limite_superior,histograma,grafica_por_grupo
-    return None,None, "","","", px.scatter()
+        return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],dias_objetivo ,limite_inferior , limite_superior,etapa,categoria, df_as_json
 
+
+@app.callback(Output("calidad-aplicaciones-mensual-graph", "figure"),
+[Input("crossfilter-xaxis-type", "value"),
+Input('crossfilter-xaxis-column', "value"),
+Input("comparar-grupos-etapa", "children"),
+Input("comparar-grupos-categoria", "children")])
+def calidad_aplicaciones_mensual(escala,year,etapa,categoria):
+    if etapa is None or categoria is None:
+        raise PreventUpdate
+        
+    histograma = query_para_grafica(etapa,categoria,escala,year)
+    return histograma
+
+
+
+@app.callback(Output("calidad-aplicaciones-por-grupo-graph", "figure"),
+[Input('tabla-calidad-grupos','data'),
+Input("crossfilter-yaxis-type", "value"),
+Input('crossfilter-yaxis-column', "value")])
+def calidad_aplicaciones_por_grupo(data,indicador,year_grupo):
+    if data is None:
+        raise PreventUpdate
+
+    df = pd.read_json(data, orient='split')
+
+    grupos_consultados = df[(pd.to_datetime(df['fecha inicio siembra']).dt.year == year_grupo)].copy()
+    grupos_consultados.rename(columns={"max_aplicaciones_tardias":"Número de aplicaciones tardías",
+    "max_aplicaciones_adelantadas":"Número de aplicaciones adelantadas",
+    "max_aplicaciones_pendientes":"Número de aplicaciones pendientes"},inplace=True)
+    grafica_por_grupo = query_para_grafica_por_grupo(grupos_consultados,indicador)
+
+    return grafica_por_grupo
 
 
 @app.callback(

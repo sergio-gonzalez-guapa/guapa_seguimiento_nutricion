@@ -68,7 +68,7 @@ calidad_aplicaciones = '''SELECT
 CONCAT('[',bloque,'](', '/',%s,'-detalle-bloque?bloque=',bloque,'#',%s,')' ) as "bloque",
 fecha_siembra as "fecha de siembra",
 finduccion as "fecha de inducción",
-aplicaciones_esperadas - num_aplicaciones_realizadas as "# de aplicaciones pendientes (programadas - realizadas)",
+aplicaciones_pendientes as "# de aplicaciones pendientes",
 num_aplicaciones_realizadas as "# de aplicaciones realizadas",
 aplicaciones_con_retraso as "# de aplicaciones realizadas tardías",
 aplicaciones_muy_proximas as "# de aplicaciones realizadas adelantadas"

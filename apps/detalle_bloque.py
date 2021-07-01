@@ -48,7 +48,7 @@ categoria,
 etapa,
 etapa2,
 -1 as calificacion,
-'faltante' as color,
+'pendiente' as color,
 'pendiente' as formula
 from aplicaciones_pendientes
 WHERE bloque =%s AND etapa2 = %s AND categoria = %s
@@ -108,9 +108,11 @@ def query_para_grafica(bloque,etapa,categoria,tabla_aplicaciones):
     df = df.append(apls_pendientes)
     fig = px.scatter(df, x="fecha", y="calificacion",color="color",
     hover_data=["fecha_str","formula"], color_discrete_map={ # replaces default color mapping by value
-                "adelantada": "purple",
+                "adelantada":"#E5BE01",
                 "en el rango": "green",
-                "tardía": "red"
+                "tardía":"#FF8000",
+                "pendiente":"#C81D11"
+                
 
             })
 
@@ -178,7 +180,12 @@ def query_para_grafica_peso_planta(bloque,categoria,etapa):
     if consulta.empty:
         return px.scatter()
 
-    fig =px.violin(consulta,x="fecha" ,y="valor",box=True, points='all',title="Peso planta")
+    #fig =px.violin(consulta,x="fecha" ,y="valor",box=True, points='all',title="Peso planta")
+    fig = go.Figure(data=go.Violin(y=consulta['valor'], box_visible=True, line_color='black',
+                               meanline_visible=True, fillcolor='lightseagreen', opacity=0.6,
+                               points='all',
+                               x=consulta['fecha']))
+    fig.update_layout(title="peso planta",yaxis_zeroline=False,xaxis_title="Fecha", yaxis_title="peso (gramos)")
     return fig
 
 @cache.memoize()
