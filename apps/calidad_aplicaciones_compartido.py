@@ -79,62 +79,6 @@ def crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs)
     return crear_layout(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs)
 
 
-label_seleccion = "Seleccione un grupo"
-opciones = [
-                        {"label": "Option 1", "value": 1},
-                        {"label": "Option 2", "value": 2},
-                    ]
-
-id_select = "select-grupo"
-label_tabla = "Bloques por grupo"
-#parametrizar opciones del select
-#Parametrizar tabla y creación de links
-label_grafica = "Curvas peso planta"
-
-def encerrar_en_tarjeta(children):
-    return dbc.Card(
-        dbc.CardBody(children),
-        className="mt-3")
-
-
-def crear_layout_select (label_seleccion,opciones,id_select):
-    select = dbc.InputGroup(
-            [
-                dbc.InputGroupAddon(label_seleccion, addon_type="prepend"),
-                dbc.Select(
-                    options=opciones,
-                id=id_select)
-                
-            ]
-        )
-
-    return encerrar_en_tarjeta(select)
-
-def crear_layout_tabla (label_tabla, ):
-
-    table_header = [
-        html.Thead(html.Tr([html.Th("First Name"), html.Th("Last Name")]))
-    ]
-
-    row1 = html.Tr([html.Td("Arthur"), html.Td("Dent")])
-    row2 = html.Tr([html.Td("Ford"), html.Td("Prefect")])
-    row3 = html.Tr([html.Td("Zaphod"), html.Td("Beeblebrox")])
-    row4 = html.Tr([html.Td("Trillian"), html.Td("Astra")])
-
-    table_body = [html.Tbody([row1, row2, row3, row4])]
-
-    table = dbc.Table(table_header + table_body, bordered=True)
-
-    return encerrar_en_tarjeta([ html.H3(label_tabla),table])
-
-
-def crear_layout_grafica(label_grafica):
-    grafica = dcc.Graph(config={
-            'displayModeBar': False
-        } )
-    return encerrar_en_tarjeta([html.H3(label_grafica),grafica])
-
-
 @app.callback(Output("url", "hash"), [Input("tipo-aplicacion-tabs", "active_tab")], [State("tipo-aplicacion-tabs","children")])
 def switch_tab(at, tabs):
     posicion_tab = int(at.split("-")[1])

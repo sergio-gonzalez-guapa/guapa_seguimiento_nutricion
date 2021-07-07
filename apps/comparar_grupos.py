@@ -14,7 +14,7 @@ from dash_extensions import Download
 from dash_extensions.snippets import send_bytes
 
 import db_connection
-from app import app,cache, dbc_table_to_pandas,crear_elemento_visual, export_excel_func
+from app import app,cache, crear_elemento_visual, export_excel_func
 
 
 ################################
@@ -26,19 +26,43 @@ from app import app,cache, dbc_table_to_pandas,crear_elemento_visual, export_exc
 # Tengo que cruzar con la fecha del grupo
 #########
 
-calidad_grupos = """select CONCAT('[',grupo,'](', '/',%s,'-detalle-grupo?grupo=',grupo,'#',%s,')' ) as "grupo", 
-grupo as "nombre grupo",
-min(fecha_siembra) as "fecha inicio siembra",
-SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) as numero_bloques,
-SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) - SUM(CASE WHEN finduccion IS NOT NULL THEN 1 ELSE 0 END) as bloques_por_forzar,
-max(aplicaciones_con_retraso) as max_aplicaciones_tardias,
-max(aplicaciones_muy_proximas) as max_aplicaciones_adelantadas,
-max(aplicaciones_pendientes) as max_aplicaciones_pendientes
+calidad_grupos = """ WITH calidad_grupos as 
+    (select CONCAT('[',grupo,'](', '/',%s,'-detalle-grupo?grupo=',grupo,'#',%s,')' ) as grupo, 
+    grupo as "nombre grupo",
+    SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) as numero_bloques,
+    SUM(CASE WHEN bloque IS NOT NULL THEN 1 ELSE 0 END) - SUM(CASE WHEN finduccion IS NOT NULL THEN 1 ELSE 0 END) as bloques_por_forzar,
+    max(aplicaciones_con_retraso) as max_aplicaciones_tardias,
+    max(aplicaciones_muy_proximas) as max_aplicaciones_adelantadas,
+    max(aplicaciones_pendientes) as max_aplicaciones_pendientes
 
-from calidad_aplicaciones 
-WHERE etapa2 =%s and categoria=%s
-group by(grupo)
-order by 2"""
+    from calidad_aplicaciones 
+    WHERE etapa2 =%s and categoria=%s
+    group by(grupo) ),
+
+    fechas_grupos AS (select descripcion, fecha from grupossiembra 
+    UNION 
+    select descripcion, max(fecha) as fecha from grupossemillero group by descripcion
+    UNION
+    select descripcion, max(fecha) as fecha from gruposforza2 group by descripcion
+    UNION
+    select descripcion, max(fecha) as fecha from gruposforza group by descripcion
+    UNION
+    select descripcion, max(fecha) as fecha from grupos2dacosecha group by descripcion)
+
+SELECT grupo,
+    "nombre grupo",
+    fecha as "fecha inicio grupo",
+    numero_bloques,
+    bloques_por_forzar,
+    max_aplicaciones_tardias,
+    max_aplicaciones_adelantadas,
+    max_aplicaciones_pendientes
+    from calidad_grupos as t1
+    LEFT JOIN fechas_grupos as t2
+    on t1."nombre grupo" = t2.descripcion
+    ORDER BY fecha
+
+"""
 
 calidad_aplicaciones_mensual2 = """ 
     SELECT grupo,
@@ -280,7 +304,7 @@ def query_para_tabla(etapa, categoria):
     #     else:
     #         consulta = consulta.copy()
     if consulta.empty==False:
-        consulta["fecha inicio siembra"]= pd.to_datetime(consulta["fecha inicio siembra"]).dt.date
+        consulta["fecha inicio grupo"]= pd.to_datetime(consulta["fecha inicio grupo"]).dt.date
 
     return consulta
 
@@ -351,7 +375,7 @@ def calidad_aplicaciones_por_grupo(data,indicador,year_grupo):
 
     df = pd.read_json(data, orient='split')
 
-    grupos_consultados = df[(pd.to_datetime(df['fecha inicio siembra']).dt.year == year_grupo)].copy()
+    grupos_consultados = df[(pd.to_datetime(df['fecha inicio grupo']).dt.year == year_grupo)].copy()
     grupos_consultados.rename(columns={"max_aplicaciones_tardias":"tardía",
     "max_aplicaciones_adelantadas":"adelantada",
     "max_aplicaciones_pendientes":"pendiente"},inplace=True)

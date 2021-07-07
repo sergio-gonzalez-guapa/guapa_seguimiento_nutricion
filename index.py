@@ -13,6 +13,8 @@ from apps import detalle_bloque as db
 from apps import programacion_aplicaciones as pa
 from apps import alertas_aplicaciones as aa
 from apps import forzamiento
+from apps import detalle_formula as df
+from apps import noticias_actualizaciones as na
 #from apps import cargue_muestreos as cm
 
 from db_connection import crear_nueva_conexion
@@ -94,7 +96,9 @@ app.validation_layout = html.Div([
     pa.layout,
     forzamiento.layout,
     shared.crear_layout_validacion(dicc_hrefs,titulo_funcionalidad, lista_nombres_tabs),
-    cg.layout
+    cg.layout,
+    df.layout,
+    na.layout
     
 ])
 
@@ -102,7 +106,7 @@ app.validation_layout = html.Div([
               [Input('url', 'pathname')])
 def display_page(pathname):
     if pathname == '/':
-        return 'Home', 'Home'     
+        return na.layout, 'Home'     
 
     if pathname == '/estado-bloques':
         return eb.layout, 'estado-bloques'
@@ -115,6 +119,10 @@ def display_page(pathname):
 
     if pathname == '/listado-forzamiento':
         return forzamiento.layout, 'listado-forzamiento'
+
+    if pathname == '/detalle-formula':
+        return df.layout, 'detalle-formula'
+
     comando = "selección inválida"
     funcionalidad="selección inválida"
     if pathname is None:
@@ -137,7 +145,9 @@ def display_page(pathname):
         dicc_funcion = {"comparar-grupos":"comparar grupos de "+tipo_grupo,
         "detalle-grupo":"detalle grupo de "+tipo_grupo, "detalle-bloque":"detalle bloque"}
 
-        resultado = shared.crear_layout(dicc_diccs_hrefs[comando],dicc_funcion[funcionalidad], dicc_tabs[comando])
+        tabs_categorias_aplicaciones = dicc_tabs[comando] + ["todas"] if funcionalidad=='detalle-bloque' else dicc_tabs[comando]
+
+        resultado = shared.crear_layout(dicc_diccs_hrefs[comando],dicc_funcion[funcionalidad], tabs_categorias_aplicaciones)
         return resultado, funcionalidad
     else:
 

@@ -184,12 +184,12 @@ def actualizar_select_bloque(path,url):
 def actualizar_valor_select_lote(search, path):
     if "detalle-grupo" not in path:
         raise PreventUpdate
-    else :
-        busqueda = search.split("=")
-        if len(busqueda)<2:
-            return None
-        else:
-            return busqueda[1]
+
+    busqueda = search.split("=")
+    if len(busqueda)<2:
+        return None
+    else:
+        return busqueda[1]
 
 #Actualización de peso planta y detalle grupo
 @app.callback([Output("detalle-grupo-table", "data"),Output('detalle-grupo-table', 'columns'),

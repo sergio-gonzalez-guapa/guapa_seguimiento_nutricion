@@ -24,6 +24,7 @@ concat(desarrollo,blocknumber)  as value
 aplicaciones_bloque = '''SELECT blocknumber,
 codigo_cedula as "codigo cédula",
 fecha,
+CONCAT('[',codigo_formula,'](', '/detalle-formula?codigo=',REPLACE(codigo_formula,' ','_'),')' ) as "código fórmula",
 descripcion_formula as formula,
 motivo,
 dias_diferencia as "dias desde la aplicación anterior",
@@ -40,6 +41,18 @@ CASE
 
 from aplicaciones 
 WHERE bloque =%s AND etapa2 = %s AND categoria = %s
+ORDER BY fecha'''
+
+aplicaciones_bloque_todas = '''SELECT distinct blocknumber,
+codigo_cedula as "codigo cédula",
+fecha,
+descripcion_formula as formula,
+motivo,
+ 'sin calificar' as color,
+0 as calificacion
+
+from aplicaciones 
+WHERE bloque =%s AND etapa2 = %s
 ORDER BY fecha'''
 
 aplicaciones_pendientes_bloque = '''SELECT bloque,
@@ -191,7 +204,13 @@ def query_para_grafica_peso_planta(bloque,categoria,etapa):
 @cache.memoize()
 def query_para_tabla(bloque, etapa, categoria):
 
-    consulta= db_connection.query(aplicaciones_bloque, [bloque,etapa,categoria])
+    consulta = pd.DataFrame()
+    if categoria=='todas':
+        consulta= db_connection.query(aplicaciones_bloque_todas, [bloque,etapa])
+    
+    else:
+        consulta= db_connection.query(aplicaciones_bloque, [bloque,etapa,categoria])
+
     if consulta.empty==False:
         consulta["fecha_str"]=consulta["fecha"].dt.strftime('%d-%B-%Y')
     
@@ -239,5 +258,5 @@ def actualizar_tabla(bloque, path, hash):
     fig_peso_planta = query_para_grafica_peso_planta(bloque,categoria,etapa)
 
     df = data.drop(["fecha","color","calificacion"],axis=1).rename(columns={"fecha_str":"fecha"})
-    return df.to_dict('records'), [{"name": i, "id": i} for i in df.columns],fig_aplicaciones,fig_peso_planta
+    return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],fig_aplicaciones,fig_peso_planta
 
