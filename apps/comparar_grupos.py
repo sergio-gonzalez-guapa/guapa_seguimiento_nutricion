@@ -66,25 +66,33 @@ SELECT grupo,
 
 calidad_aplicaciones_mensual2 = """ 
     SELECT grupo,
-            date_trunc('month', fecha) as mes,
-            1 as conteo,
-            CASE WHEN calidad in (0,1) THEN 'adelantada'
-                WHEN calidad =2 THEN 'en el rango'
-                WHEN calidad in (3,4) THEN 'tardía'
-                ELSE 'validar'
-                END AS calidad
+        area/10000 as area_aplicacion,
+        lote,
+        date_trunc('month', fecha) as mes,
+        1 as conteo,
+        CASE WHEN calidad in (0,1) THEN 'adelantada'
+            WHEN calidad =2 THEN 'en el rango'
+            WHEN calidad in (3,4) THEN 'tardía'
+            ELSE 'validar'
+            END AS calidad
 
-        FROM  aplicaciones
+        FROM  aplicaciones as t1
+        left join blocks as t2
+        on t1.blocknumber=t2.codigo
         WHERE etapa2 = %s and categoria = %s AND EXTRACT(YEAR FROM fecha) =%s
         """
 
 aplicaciones_pendientes_mensual = """ 
     SELECT grupo,
+            area/10000 as area_aplicacion,
+            lote,
             date_trunc('month', fecha) as mes,
             1 as conteo,
             'pendiente' AS calidad
 
-        FROM  aplicaciones_pendientes
+        FROM  aplicaciones_pendientes as t1
+        left join blocks as t2
+        on t1.blocknumber=t2.codigo
         WHERE etapa2 = %s and categoria = %s AND EXTRACT(YEAR FROM fecha) =%s
         """
 #################
@@ -140,7 +148,7 @@ graficas_calidad = html.Div([
             ),
             dcc.RadioItems(
                 id='crossfilter-xaxis-type',
-                options=[{'label': i, 'value': i} for i in ['absoluto', 'porcentual']],
+                options=[{'label': i, 'value': i} for i in ['absoluto', 'porcentual','loteyarea']],
                 value='absoluto',
                 labelStyle={'display': 'inline-block', 'marginTop': '5px'}
             )
@@ -152,12 +160,6 @@ graficas_calidad = html.Div([
                 id='crossfilter-yaxis-column',
                 options=[{'label': i, 'value': i} for i in list(range(2014,2022))],
                 value=2021
-            ),
-            dcc.RadioItems(
-                id='crossfilter-yaxis-type',
-                options=[{'label': i, 'value': i} for i in ['tardías', 'adelantadas','pendientes']],
-                value="tardías",
-                labelStyle={'display': 'inline-block', 'marginTop': '5px'}
             )
         ], style={'width': '49%', 'float': 'right', 'display': 'inline-block'})
     ], style={
@@ -203,9 +205,10 @@ html.H1("Calidad de aplicaciones por grupos"),
 ##############################
 
 
-#@cache.memoize()
+@cache.memoize()
 def consulta_grafica_por_fecha(etapa,categoria_query,year):
     return  db_connection.query(calidad_aplicaciones_mensual2, [str(etapa),str(categoria_query),year])
+
 
 @cache.memoize()
 def consulta_grafica_pendientes_por_fecha(etapa,categoria_query,year):
@@ -214,13 +217,15 @@ def consulta_grafica_pendientes_por_fecha(etapa,categoria_query,year):
 def query_para_grafica(etapa, categoria,escala,year):
     consulta_pendientes = consulta_grafica_pendientes_por_fecha(etapa,categoria,year)
     consulta =consulta_grafica_por_fecha(etapa,categoria,year)
-    consulta = consulta.append(consulta_pendientes)
+    ejecucion_y_pendientes = consulta.append(consulta_pendientes)
     
     if consulta.empty:
-        print("consulta vacía")
         return px.scatter()
 
-    consulta_agrupada = consulta.groupby(["mes","grupo","calidad"])["conteo"].sum().reset_index()
+    consulta_agrupada = ejecucion_y_pendientes.groupby(["mes","grupo","calidad"])["conteo"].sum().reset_index()
+
+    # consulta_agrupada = 
+    
     fig = px.scatter()
     if escala=="porcentual":
         fig = px.histogram(consulta_agrupada, x="mes", y="conteo",color="calidad",
@@ -238,8 +243,20 @@ def query_para_grafica(etapa, categoria,escala,year):
     barnorm="percent",
     title = "por fecha de aplicación")
 
-    else: 
+    elif escala=="absoluto": 
         fig = px.bar(consulta_agrupada, x="mes", y="conteo",color="calidad",hover_data=["grupo"],
+        color_discrete_map={ # replaces default color mapping by value
+                "adelantada":"#E5BE01",
+                "en el rango": "green",
+                "tardía":"#FF8000",
+                "pendiente":"#C81D11"
+        },
+        category_orders  ={ "calidad": ["adelantada","en el rango","tardía"]} ,
+        title = "por fecha de aplicación")
+
+    else: 
+        consulta_agrupada_por_lote = ejecucion_y_pendientes.groupby(["mes","lote","calidad"])["area_aplicacion"].sum().reset_index()
+        fig = px.bar(consulta_agrupada_por_lote, x="mes", y="area_aplicacion",color="calidad",hover_data=["lote"],
         color_discrete_map={ # replaces default color mapping by value
                 "adelantada":"#E5BE01",
                 "en el rango": "green",
@@ -251,7 +268,7 @@ def query_para_grafica(etapa, categoria,escala,year):
 
     return fig
 
-def query_para_grafica_por_grupo(df,indicador):
+def query_para_grafica_por_grupo(df):
 
     if df.empty:
         print("consulta vacía")
@@ -367,9 +384,8 @@ def calidad_aplicaciones_mensual(escala,year,etapa,categoria):
 
 @app.callback(Output("calidad-aplicaciones-por-grupo-graph", "figure"),
 [Input('tabla-calidad-grupos','data'),
-Input("crossfilter-yaxis-type", "value"),
 Input('crossfilter-yaxis-column', "value")])
-def calidad_aplicaciones_por_grupo(data,indicador,year_grupo):
+def calidad_aplicaciones_por_grupo(data,year_grupo):
     if data is None:
         raise PreventUpdate
 
@@ -379,7 +395,7 @@ def calidad_aplicaciones_por_grupo(data,indicador,year_grupo):
     grupos_consultados.rename(columns={"max_aplicaciones_tardias":"tardía",
     "max_aplicaciones_adelantadas":"adelantada",
     "max_aplicaciones_pendientes":"pendiente"},inplace=True)
-    grafica_por_grupo = query_para_grafica_por_grupo(grupos_consultados,indicador)
+    grafica_por_grupo = query_para_grafica_por_grupo(grupos_consultados)
 
     return grafica_por_grupo
 
