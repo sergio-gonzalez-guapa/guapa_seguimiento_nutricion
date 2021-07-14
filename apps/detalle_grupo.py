@@ -112,7 +112,7 @@ ORDER BY fecha
 #################
 
 layout = html.Div([
-    crear_elemento_visual(tipo="dbc_select",element_id="select-grupo",params={"label":"seleccione un grupo"}),
+    crear_elemento_visual(tipo="dcc_select",element_id="select-grupo",params={"label":"seleccione un grupo"}),
     html.H1("Calidad de aplicaciones"),
     crear_elemento_visual(tipo="dash_table",element_id='detalle-grupo-table'),
     html.H1("Comparativo de muestreos"),

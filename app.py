@@ -93,7 +93,18 @@ def crear_elemento_visual(tipo,element_id,params=None,encerrado=True):
 
     elemento=None
 
-    if tipo=="dbc_select":
+    if tipo=="dcc_select":
+        label = params["label"]
+        
+        elemento = dbc.InputGroup(
+                [
+                    dbc.InputGroupAddon(label, addon_type="prepend"),
+                    dcc.Dropdown(id=element_id,style={"min-width":"200px","width":"fit-content"})
+                    
+                ],
+                style={"width":"fit-content"}
+            )
+    elif tipo=="dbc_select":
         label = params["label"]
         
         elemento = dbc.InputGroup(

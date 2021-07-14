@@ -1,3 +1,4 @@
+from dash_bootstrap_components._components.Button import Button
 import pandas as pd
 import plotly.express as px
 pd.options.mode.chained_assignment = None  # default='warn'
@@ -78,18 +79,36 @@ select fecha_siembra,
  WHERE bloque=%s
 
 """
+
+grupo_siembra_bloque = """
+SELECT grupo_siembra as grupo
+FROM blocks_desarrollo
+WHERE bloque = %s"""
+
+grupo_forza_bloque = """
+SELECT grupo_forza as grupo
+FROM blocks_desarrollo
+WHERE bloque = %s"""
+
+grupo_semillero_bloque = """
+SELECT grupo_semillero as grupo
+FROM blocks_desarrollo
+WHERE bloque = %s"""
+
 #################
 # Layout ########
 #################
 
 layout = html.Div([
-    crear_elemento_visual(tipo="dbc_select",element_id="select-bloque",params={"label":"seleccione un bloque"}),
+    crear_elemento_visual(tipo="dcc_select",element_id="select-bloque",params={"label":"seleccione un bloque"}),
+    html.Br(),
+    html.A(Button("Volver al grupo",color="primary", className="mr-1"),id="ir-a-grupo-link"),
     html.H1("Calidad de aplicaciones"),
     crear_elemento_visual(tipo="graph",element_id="aplicaciones-bloque-graph"),
     html.H1("Muestreo variable de interés"),
     crear_elemento_visual(tipo="graph",element_id="peso-planta-bloque-graph"),
     html.H1("Detalle aplicaciones"),
-    crear_elemento_visual(tipo="dash_table",element_id='detalle-bloque-table')
+    crear_elemento_visual(tipo="dash_table",element_id='aplicaciones-bloque-table')
     ])
 
 
@@ -103,6 +122,24 @@ def query_para_select():
     opciones = [{"label":row["label"],"value":row["value"]} for _,row in consulta.iterrows()]
     return opciones
 
+def query_para_link(bloque,etapa):
+    grupo = ""
+    ruta = etapa
+    if etapa =="preforza":
+        grupo =  db_connection.query(grupo_siembra_bloque, [bloque])["grupo"][0]
+    
+    elif etapa =="postforza":
+        grupo = db_connection.query(grupo_forza_bloque, [bloque])["grupo"][0]
+
+    elif etapa =="semillero":
+        grupo = db_connection.query(grupo_semillero_bloque, [bloque])["grupo"][0]
+    
+    else:
+        grupo="desconocido"
+
+    ruta = f"http://127.0.0.1:8050/{ruta}-detalle-grupo?grupo={grupo}#nutricion" 
+
+    return ruta
 
 #Señalización por colores de aplicaciones de acuerdo con rangos
 @cache.memoize()
@@ -240,7 +277,9 @@ def actualizar_valor_select_bloque(search, path):
             return busqueda[1]
 
 
-@app.callback([Output("detalle-bloque-table", "data"),Output('detalle-bloque-table', 'columns'),
+@app.callback([Output("ir-a-grupo-link", "href"),
+Output("aplicaciones-bloque-table", "data"),
+Output('aplicaciones-bloque-table', 'columns'),
 Output("aplicaciones-bloque-graph", "figure"),
 Output("peso-planta-bloque-graph", "figure")],
  [Input("select-bloque", "value")],
@@ -251,12 +290,17 @@ def actualizar_tabla(bloque, path, hash):
 
     etapa = path.split("-")[0][1:]
     categoria = hash[1:]
-
+    
+    href_grupo= query_para_link(bloque,etapa)
+    
     data = query_para_tabla(bloque,etapa,categoria)
     
     fig_aplicaciones = query_para_grafica(bloque,etapa,categoria,data)
     fig_peso_planta = query_para_grafica_peso_planta(bloque,categoria,etapa)
 
-    df = data.drop(["fecha","color","calificacion"],axis=1).rename(columns={"fecha_str":"fecha"})
-    return df.to_dict('records'), [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns],fig_aplicaciones,fig_peso_planta
+    df = data.drop(["blocknumber","fecha","color","calificacion"],axis=1).rename(columns={"fecha_str":"fecha ejecución"})
+
+    data_final = df.to_dict('records')
+    cols_final = [{"name": i, "id": i,'presentation':'markdown'} for i in df.columns]
+    return href_grupo,data_final,cols_final ,fig_aplicaciones,fig_peso_planta
 

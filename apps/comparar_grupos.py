@@ -301,25 +301,6 @@ def query_para_grafica_por_grupo(df):
 def query_para_tabla(etapa, categoria):
 
     consulta = db_connection.query(calidad_grupos, [etapa,categoria,etapa,categoria])
-
-    # #Filtrar por estado de forza
-    # if estado_forza is not None:
-    #     #Posibles valorses que puede tomar la lista: 1,3,5
-    #     suma = sum(estado_forza)
-    #     if suma==1:
-    #         consulta = consulta[consulta.bloques_por_forzar==0]
-    #     elif suma==3:
-    #         consulta = consulta[consulta.bloques_por_forzar==consulta.numero_bloques]
-    #     elif suma==4:
-    #         consulta = consulta[ (consulta.bloques_por_forzar==0) | (consulta.bloques_por_forzar==consulta.numero_bloques)]
-    #     elif suma==5:
-    #         consulta = consulta[ (consulta.bloques_por_forzar>0) & (consulta.bloques_por_forzar<consulta.numero_bloques)]
-    #     elif suma==6:
-    #         consulta = consulta[ consulta.bloques_por_forzar<consulta.numero_bloques]       
-    #     elif suma==8:
-    #         consulta = consulta[ consulta.bloques_por_forzar>0]   
-    #     else:
-    #         consulta = consulta.copy()
     if consulta.empty==False:
         consulta["fecha inicio grupo"]= pd.to_datetime(consulta["fecha inicio grupo"]).dt.date
 

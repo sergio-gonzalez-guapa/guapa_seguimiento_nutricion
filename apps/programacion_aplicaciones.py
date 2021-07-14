@@ -18,7 +18,8 @@ fecha,
 area,
 codformula 
 FROM programacionaplicaciones
-WHERE EXTRACT(YEAR FROM fecha) =%s
+WHERE EXTRACT(YEAR FROM fecha) =%s AND
+EXTRACT(WEEK FROM fecha) =%s
 )
 , grupos_actuales as (select bloque,
         CASE 
@@ -41,12 +42,11 @@ WHERE grupo_siembra IS NOT NULL),
     ON t1.block=t2.bloque)
 
 select fecha,codformula,
- formula, grupo,
-  string_agg(block, ', ') as bloques,
-   ROUND(SUM(area)::numeric,2) as area
+formula, grupo,
+string_agg(block, ', ') as bloques,
+ROUND(SUM(area)::numeric,2) as area
 
 from base_cruce
-WHERE EXTRACT(WEEK FROM fecha) =%s
 group by codformula,formula,fecha,grupo
 ORDER BY fecha,formula
 """
